@@ -1,0 +1,6 @@
+@BCLMSApi_HostAddress = http://localhost:5045
+
+GET {{BCLMSApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

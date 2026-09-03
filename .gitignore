@@ -1,0 +1,19 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Local settings and secrets
+BCLMSApi/appsettings.json
+BCLMSApi/appsettings.Development.json
+BCLMSApi/appsettings.UAT.json
+BCLMSApi/appsettings.Production.json
+
+# Logs
+*.log
