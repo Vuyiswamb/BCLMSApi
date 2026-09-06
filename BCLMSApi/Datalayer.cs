@@ -15,18 +15,24 @@ public class Datalayer
 
     public SqlCommand CreateStoredProcedureCommand(string procedureName)
     {
-        return new SqlCommand(procedureName, new SqlConnection(connectionString))
-        {
-            CommandType = CommandType.StoredProcedure
-        };
+        return CreateCommand(procedureName, CommandType.StoredProcedure);
     }
 
     public SqlCommand CreateTextCommand(string commandText)
     {
-        return new SqlCommand(commandText, new SqlConnection(connectionString))
+        return CreateCommand(commandText, CommandType.Text);
+    }
+
+    private SqlCommand CreateCommand(string commandText, CommandType commandType)
+    {
+        var connection = new SqlConnection(connectionString);
+        var command = new SqlCommand(commandText, connection)
         {
-            CommandType = CommandType.Text
+            CommandType = commandType
         };
+
+        command.Disposed += (_, _) => connection.Dispose();
+        return command;
     }
 
     private static bool HasColumn(IDataRecord reader, string columnName)

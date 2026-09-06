@@ -16,6 +16,8 @@ public class StallResponse
     public bool IsOccupied { get; set; }
     public string? AllocatedTrackingNumber { get; set; }
     public string? AllocatedBusinessName { get; set; }
+    public string? AllocatedApplicationStatus { get; set; }
+    public string? AllocatedApplicationStage { get; set; }
 }
 
 public class StallSaveRequest

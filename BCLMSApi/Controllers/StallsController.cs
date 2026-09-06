@@ -392,9 +392,26 @@ public class StallsController(Datalayer datalayer, IUserTokenService userTokenSe
             RestrictedStreetName = reader.IsDBNull(reader.GetOrdinal("RestrictedStreetName")) ? null : reader.GetString(reader.GetOrdinal("RestrictedStreetName")),
             RestrictedAreaCode = reader.IsDBNull(reader.GetOrdinal("RestrictedAreaCode")) ? null : reader.GetString(reader.GetOrdinal("RestrictedAreaCode")),
             IsOccupied = reader.GetBoolean(reader.GetOrdinal("IsOccupied")),
-            AllocatedTrackingNumber = reader.IsDBNull(reader.GetOrdinal("AllocatedTrackingNumber")) ? null : reader.GetString(reader.GetOrdinal("AllocatedTrackingNumber")),
-            AllocatedBusinessName = reader.IsDBNull(reader.GetOrdinal("AllocatedBusinessName")) ? null : reader.GetString(reader.GetOrdinal("AllocatedBusinessName"))
+            AllocatedTrackingNumber = GetOptionalString(reader, "AllocatedTrackingNumber"),
+            AllocatedBusinessName = GetOptionalString(reader, "AllocatedBusinessName"),
+            AllocatedApplicationStatus = GetOptionalString(reader, "AllocatedApplicationStatus"),
+            AllocatedApplicationStage = GetOptionalString(reader, "AllocatedApplicationStage")
         };
+    }
+
+    private static string? GetOptionalString(IDataRecord reader, string columnName)
+    {
+        for (var index = 0; index < reader.FieldCount; index++)
+        {
+            if (!string.Equals(reader.GetName(index), columnName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            return reader.IsDBNull(index) ? null : reader.GetString(index);
+        }
+
+        return null;
     }
 
     private static void AddRestrictedAreaParameters(SqlCommand command, RestrictedTradingAreaSaveRequest request)

@@ -375,6 +375,7 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
 
         if (decision.Equals("Approve", StringComparison.OrdinalIgnoreCase)
             && (request.DocumentName?.Contains("Admin Approval", StringComparison.OrdinalIgnoreCase) == true
+                || request.DocumentName?.Contains("Functional Head Approval", StringComparison.OrdinalIgnoreCase) == true
                 || request.DocumentName?.Contains("Director Approval", StringComparison.OrdinalIgnoreCase) == true)
             && string.IsNullOrWhiteSpace(request.SignatureBase64))
         {
@@ -754,21 +755,14 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
 
     private static List<TrackingWorkflowStepResponse> CreateDefaultTrackingSteps(string licenceType, string currentStage, string applicationStatus)
     {
-        var steps = new List<TrackingWorkflowStepResponse>
-        {
-            new() { Name = "Application intake", Group = "Compliance Officer", Status = "Pending" },
-            new() { Name = "Zoning verification", Group = "City Planning", Status = "Pending" },
-            new() { Name = "Health report", Group = "Health Department", Status = "Pending" },
-            new() { Name = "Fire report", Group = "Fire Department", Status = "Pending" },
-            new() { Name = "Senior specialist review", Group = "Senior Specialist", Status = "Pending" },
-            new() { Name = "Final licence decision", Group = "Compliance Officer", Status = "Pending" }
-        };
-
-        if (IsFormalLicence(licenceType))
-        {
-            steps.Insert(1, new() { Name = "Proof of payment verification", Group = "Compliance Officer", Status = "Pending" });
-            steps.Insert(2, new() { Name = "CIPC verification", Group = "Compliance Officer", Status = "Pending" });
-        }
+        var steps = CreateDefaultWorkflowDefinitions(licenceType, null)
+            .Select(step => new TrackingWorkflowStepResponse
+            {
+                Name = step.StepName,
+                Group = step.GroupName,
+                Status = "Pending"
+            })
+            .ToList();
 
         var currentIndex = steps.FindIndex(step => string.Equals(step.Name, currentStage, StringComparison.OrdinalIgnoreCase));
         if (currentIndex < 0)
@@ -789,57 +783,22 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
                     : applicationStatus;
             }
         }
-
-        return EnsureTrackingWorkshopStep(licenceType, steps);
+        return steps;
     }
 
     private static List<InternalApplicationWorkflowStepResponse> CreateDefaultInternalWorkflowSteps(InternalApplicationDetailResponse application)
     {
-        var isHawkers = string.Equals(application.LicenceType, "Hawkers Licence", StringComparison.OrdinalIgnoreCase);
         var isFormal = IsFormalLicence(application.LicenceType);
-        var definitions = isHawkers
-            ? new (string StepName, string GroupName)[]
-            {
-                ("Workshop", "Compliance Officer"),
-                ("Application Submitted", "Compliance Officer"),
-                ("Home Affairs Verification", "Compliance Officer"),
-                ("TMPD Inspection (Site Inspection)", "Metro Police"),
-                ("Admin Approval", "Compliance Officer"),
-                ("Functional Head Approval", "Functional Head"),
-                ("Director Approval", "Director"),
-                ("Licence Issued", "Compliance Officer")
-            }
-            : !isFormal
-                ? new (string StepName, string GroupName)[]
-                {
-                    ("Workshop", "Compliance Officer"),
-                    ("Application intake", "Compliance Officer"),
-                    ("Zoning verification", "City Planning"),
-                    ("Health report", "Health Department"),
-                    ("Fire report", "Fire Department"),
-                    ("Senior specialist review", "Senior Specialist"),
-                    ("Final licence decision", "Compliance Officer")
-                }
-            : new (string StepName, string GroupName)[]
-            {
-                ("Application intake", "Compliance Officer"),
-                ("Proof of payment verification", "Compliance Officer"),
-                ("CIPC verification", "Compliance Officer"),
-                ("Zoning verification", "City Planning"),
-                ("Health report", "Health Department"),
-                ("Fire report", "Fire Department"),
-                ("Senior specialist review", "Senior Specialist"),
-                ("Final licence decision", "Compliance Officer")
-            };
+        var definitions = CreateDefaultWorkflowDefinitions(application.LicenceType, application.AreaCategory);
 
-        var currentIndex = Array.FindIndex(definitions, step => string.Equals(step.StepName, application.CurrentStage, StringComparison.OrdinalIgnoreCase));
+        var currentIndex = definitions.FindIndex(step => string.Equals(step.StepName, application.CurrentStage, StringComparison.OrdinalIgnoreCase));
         if (currentIndex < 0)
         {
             currentIndex = isFormal ? 0 : 1;
         }
 
         var steps = new List<InternalApplicationWorkflowStepResponse>();
-        for (var index = 0; index < definitions.Length; index += 1)
+        for (var index = 0; index < definitions.Count; index += 1)
         {
             var status = "Pending";
             if (index < currentIndex)
@@ -923,6 +882,53 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
     private static bool IsFormalLicence(string licenceType)
     {
         return licenceType.StartsWith("Formal Business", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static List<(string StepName, string GroupName)> CreateDefaultWorkflowDefinitions(string licenceType, string? areaCategory)
+    {
+        var siteInspectionGroup = SiteInspectionGroup(areaCategory);
+
+        if (!IsFormalLicence(licenceType))
+        {
+            return
+            [
+                ("Workshop", "Compliance Officer"),
+                ("Application Submitted", "Compliance Officer"),
+                ("Home Affairs Verification", "Compliance Officer"),
+                ("TMPD Inspection (Site Inspection)", siteInspectionGroup),
+                ("Admin Approval", "Admin Officer"),
+                ("Functional Head Approval", "Functional Head"),
+                ("Director Approval", "Director"),
+                ("Licence Issued", "Compliance Officer")
+            ];
+        }
+
+        return
+        [
+            ("Application intake", "Compliance Officer"),
+            ("Proof of payment verification", "Compliance Officer"),
+            ("CIPC verification", "Compliance Officer"),
+            ("Zoning verification", "City Planning"),
+            ("Health report", "Health Department"),
+            ("Fire report", "Fire Department"),
+            ("Senior specialist review", "Senior Specialist"),
+            ("Admin Approval", "Admin Officer"),
+            ("Functional Head Approval", "Functional Head"),
+            ("Director Approval", "Director"),
+            ("Licence Issued", "Compliance Officer")
+        ];
+    }
+
+    private static string SiteInspectionGroup(string? areaCategory)
+    {
+        var category = areaCategory ?? string.Empty;
+        return category.Contains("Restricted", StringComparison.OrdinalIgnoreCase)
+            && !category.Contains("Non Restricted", StringComparison.OrdinalIgnoreCase)
+            && !category.Contains("Non-Restricted", StringComparison.OrdinalIgnoreCase)
+            && !category.Contains("Non Declared", StringComparison.OrdinalIgnoreCase)
+            && !category.Contains("Non-Declared", StringComparison.OrdinalIgnoreCase)
+            ? "Compliance Officer"
+            : "Metro Police";
     }
 
     private static void ValidateTradingBusinessType(string licenceType, string? businessType)

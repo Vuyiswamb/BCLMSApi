@@ -728,7 +728,9 @@ END;
 GO
 
 CREATE OR ALTER PROCEDURE dbo.usp_Applications_GetInternal
-    @CustomerUserId INT = NULL
+    @CustomerUserId INT = NULL,
+    @HasAllRegions BIT = 1,
+    @RegionNames NVARCHAR(MAX) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -762,6 +764,16 @@ BEGIN
     LEFT JOIN dbo.AttachmentTypes attachmentTypes ON attachmentTypes.AttachmentTypeId = documents.AttachmentTypeId
     WHERE applications.Archive_Date IS NULL
       AND (@CustomerUserId IS NULL OR applications.UserId = @CustomerUserId)
+      AND (
+          @CustomerUserId IS NOT NULL
+          OR @HasAllRegions = 1
+          OR EXISTS
+          (
+              SELECT 1
+              FROM STRING_SPLIT(COALESCE(@RegionNames, ''), ',') regions
+              WHERE LTRIM(RTRIM(regions.value)) = applications.RegionName
+          )
+      )
     GROUP BY
         applications.ApplicationId,
         applications.TrackingNumber,
@@ -782,7 +794,9 @@ GO
 
 CREATE OR ALTER PROCEDURE dbo.usp_Applications_GetInternalDetail
     @ApplicationId INT,
-    @CustomerUserId INT = NULL
+    @CustomerUserId INT = NULL,
+    @HasAllRegions BIT = 1,
+    @RegionNames NVARCHAR(MAX) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -822,7 +836,17 @@ BEGIN
     LEFT JOIN dbo.lu_application_status statuses ON statuses.Application_Status_id = applications.Application_Status_id
     WHERE applications.ApplicationId = @ApplicationId
       AND applications.Archive_Date IS NULL
-      AND (@CustomerUserId IS NULL OR applications.UserId = @CustomerUserId);
+      AND (@CustomerUserId IS NULL OR applications.UserId = @CustomerUserId)
+      AND (
+          @CustomerUserId IS NOT NULL
+          OR @HasAllRegions = 1
+          OR EXISTS
+          (
+              SELECT 1
+              FROM STRING_SPLIT(COALESCE(@RegionNames, ''), ',') regions
+              WHERE LTRIM(RTRIM(regions.value)) = applications.RegionName
+          )
+      );
 
     SELECT
         steps.StepName,
@@ -1392,43 +1416,49 @@ BEGIN
     SET TrackingNumber = @TrackingNumber
     WHERE ApplicationId = @ApplicationId;
 
-    IF @LicenceType NOT LIKE 'Formal Business%'
-    BEGIN
-        INSERT dbo.ApplicationWorkflowSteps
-        (
-            ApplicationId,
-            StepName,
-            AssignedGroupId,
-            SequenceNumber,
-            Status,
-            StartedDate,
-            CompletedDate
-        )
-        SELECT
-            @ApplicationId,
-            workflow.StepName,
-            groups.GroupId,
-            workflow.SequenceNumber,
-            workflow.Status,
-            workflow.StartedDate,
-            workflow.CompletedDate
-        FROM
-        (
-            VALUES
-                (1, 'Workshop', @ComplianceGroupName, 'Approved', GETDATE(), GETDATE()),
-                (2, 'Application Submitted', @ComplianceGroupName, CASE WHEN @LicenceType = 'Hawkers Licence' THEN 'Approved' ELSE 'Pending' END, CASE WHEN @LicenceType = 'Hawkers Licence' THEN GETDATE() ELSE NULL END, CASE WHEN @LicenceType = 'Hawkers Licence' THEN GETDATE() ELSE NULL END),
-                (3, CASE WHEN @LicenceType = 'Hawkers Licence' THEN 'Home Affairs Verification' ELSE 'Application intake' END, @ComplianceGroupName, 'Pending', NULL, NULL),
-                (4, CASE WHEN @LicenceType = 'Hawkers Licence' THEN 'TMPD Inspection (Site Inspection)' WHEN @IsFormalBusiness = 1 THEN 'Proof of payment verification' ELSE 'Zoning verification' END, CASE WHEN @LicenceType = 'Hawkers Licence' THEN 'Metro Police' WHEN @IsFormalBusiness = 1 THEN @ComplianceGroupName ELSE 'City Planning' END, 'Pending', NULL, NULL),
-                (5, CASE WHEN @LicenceType = 'Hawkers Licence' THEN 'Admin Approval' WHEN @IsFormalBusiness = 1 THEN 'CIPC verification' ELSE 'Health report' END, CASE WHEN @LicenceType = 'Hawkers Licence' THEN @ComplianceGroupName WHEN @IsFormalBusiness = 1 THEN @ComplianceGroupName ELSE 'Health Department' END, 'Pending', NULL, NULL),
-                (6, CASE WHEN @LicenceType = 'Hawkers Licence' THEN 'Functional Head Approval' WHEN @IsFormalBusiness = 1 THEN 'Zoning verification' ELSE 'Fire report' END, CASE WHEN @LicenceType = 'Hawkers Licence' THEN 'Functional Head' WHEN @IsFormalBusiness = 1 THEN 'City Planning' ELSE 'Fire Department' END, 'Pending', NULL, NULL),
-                (7, CASE WHEN @LicenceType = 'Hawkers Licence' THEN 'Director Approval' WHEN @IsFormalBusiness = 1 THEN 'Health report' ELSE 'Senior specialist review' END, CASE WHEN @LicenceType = 'Hawkers Licence' THEN 'Director' WHEN @IsFormalBusiness = 1 THEN 'Health Department' ELSE 'Senior Specialist' END, 'Pending', NULL, NULL),
-                (8, CASE WHEN @LicenceType = 'Hawkers Licence' THEN 'Licence Issued' WHEN @IsFormalBusiness = 1 THEN 'Fire report' ELSE 'Final licence decision' END, CASE WHEN @LicenceType = 'Hawkers Licence' THEN @ComplianceGroupName WHEN @IsFormalBusiness = 1 THEN 'Fire Department' ELSE @ComplianceGroupName END, 'Pending', NULL, NULL),
-                (9, 'Senior specialist review', 'Senior Specialist', 'Pending', NULL, NULL),
-                (10, 'Final licence decision', @ComplianceGroupName, 'Pending', NULL, NULL)
-        ) AS workflow (SequenceNumber, StepName, GroupName, Status, StartedDate, CompletedDate)
-        INNER JOIN dbo.Groups groups ON groups.GroupName = workflow.GroupName
-        WHERE workflow.SequenceNumber <= CASE WHEN @IsFormalBusiness = 1 THEN 10 ELSE 8 END;
-    END;
+    INSERT dbo.ApplicationWorkflowSteps
+    (
+        ApplicationId,
+        StepName,
+        AssignedGroupId,
+        SequenceNumber,
+        Status,
+        StartedDate,
+        CompletedDate
+    )
+    SELECT
+        @ApplicationId,
+        workflow.StepName,
+        groups.GroupId,
+        workflow.SequenceNumber,
+        workflow.Status,
+        workflow.StartedDate,
+        workflow.CompletedDate
+    FROM
+    (
+        VALUES
+            (1, 'Workshop', 'Compliance Officer', 'Approved', GETDATE(), GETDATE(), 0),
+            (2, 'Application Submitted', 'Compliance Officer', 'Pending', NULL, NULL, 0),
+            (3, 'Home Affairs Verification', 'Compliance Officer', 'Pending', NULL, NULL, 0),
+            (4, 'TMPD Inspection (Site Inspection)', @ComplianceGroupName, 'Pending', NULL, NULL, 0),
+            (5, 'Admin Approval', 'Admin Officer', 'Pending', NULL, NULL, 0),
+            (6, 'Functional Head Approval', 'Functional Head', 'Pending', NULL, NULL, 0),
+            (7, 'Director Approval', 'Director', 'Pending', NULL, NULL, 0),
+            (8, 'Licence Issued', 'Compliance Officer', 'Pending', NULL, NULL, 0),
+            (1, 'Application intake', 'Compliance Officer', 'Pending', NULL, NULL, 1),
+            (2, 'Proof of payment verification', 'Compliance Officer', 'Pending', NULL, NULL, 1),
+            (3, 'CIPC verification', 'Compliance Officer', 'Pending', NULL, NULL, 1),
+            (4, 'Zoning verification', 'City Planning', 'Pending', NULL, NULL, 1),
+            (5, 'Health report', 'Health Department', 'Pending', NULL, NULL, 1),
+            (6, 'Fire report', 'Fire Department', 'Pending', NULL, NULL, 1),
+            (7, 'Senior specialist review', 'Senior Specialist', 'Pending', NULL, NULL, 1),
+            (8, 'Admin Approval', 'Admin Officer', 'Pending', NULL, NULL, 1),
+            (9, 'Functional Head Approval', 'Functional Head', 'Pending', NULL, NULL, 1),
+            (10, 'Director Approval', 'Director', 'Pending', NULL, NULL, 1),
+            (11, 'Licence Issued', 'Compliance Officer', 'Pending', NULL, NULL, 1)
+    ) AS workflow (SequenceNumber, StepName, GroupName, Status, StartedDate, CompletedDate, FormalOnly)
+    INNER JOIN dbo.Groups groups ON groups.GroupName = workflow.GroupName
+    WHERE workflow.FormalOnly = @IsFormalBusiness;
 
     SELECT
         ApplicationId,

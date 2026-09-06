@@ -1,10 +1,22 @@
 using BCLMSApi.Data;
 using BCLMSApi.Services;
+using Microsoft.AspNetCore.Http.Features;
+
+const long MaxPdfBytes = 10 * 1024 * 1024;
+const long MultipartRequestBytes = MaxPdfBytes + 1 * 1024 * 1024;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = MultipartRequestBytes;
+});
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = MultipartRequestBytes;
+});
 builder.Services.AddControllers();
 builder.Services.AddScoped<Datalayer>();
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();

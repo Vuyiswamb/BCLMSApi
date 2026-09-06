@@ -82,6 +82,7 @@ public class ComplaintsController(IComplaintService complaintService, IUserToken
     }
 
     [HttpPut("internal/{complaintId:int}/status")]
+    [HttpPost("internal/{complaintId:int}/status")]
     public async Task<ActionResult<ComplaintResponse>> UpdateComplaintStatus(int complaintId, ComplaintStatusUpdateRequest request)
     {
         var user = userTokenService.GetValidTokenPayload(Request.Headers.Authorization);
@@ -141,3 +142,4 @@ public class ComplaintsController(IComplaintService complaintService, IUserToken
         }
     }
 }
+

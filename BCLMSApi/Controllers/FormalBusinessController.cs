@@ -10,6 +10,7 @@ namespace BCLMSApi.Controllers;
 public class FormalBusinessController(IFormalBusinessService formalBusinessService, IUserTokenService userTokenService) : ControllerBase
 {
     private const long MaxPdfBytes = 10 * 1024 * 1024;
+    private const long MultipartRequestBytes = MaxPdfBytes + 1 * 1024 * 1024;
 
     [HttpGet("new-application-template")]
     public ActionResult<FormalBusinessApplicationTemplate> GetNewApplicationTemplate()
@@ -476,7 +477,7 @@ public class FormalBusinessController(IFormalBusinessService formalBusinessServi
         }
     }
 
-    [RequestSizeLimit(MaxPdfBytes)]
+    [RequestSizeLimit(MultipartRequestBytes)]
     [HttpPost("applications/{applicationId:int}/attachments")]
     public async Task<ActionResult<AttachmentUploadResponse>> UploadAttachment(int applicationId, [FromForm] AttachmentUploadRequest request)
     {
