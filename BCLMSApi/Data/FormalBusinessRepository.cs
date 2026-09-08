@@ -234,6 +234,9 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
                     ApplicantName = reader.GetString(reader.GetOrdinal("ApplicantName")),
                     BusinessName = reader.GetString(reader.GetOrdinal("BusinessName")),
                     LicenceType = reader.GetString(reader.GetOrdinal("LicenceType")),
+                    EventStartDate = HasColumn(reader, "EventStartDate") && !reader.IsDBNull(reader.GetOrdinal("EventStartDate")) ? reader.GetDateTime(reader.GetOrdinal("EventStartDate")) : null,
+                    EventEndDate = HasColumn(reader, "EventEndDate") && !reader.IsDBNull(reader.GetOrdinal("EventEndDate")) ? reader.GetDateTime(reader.GetOrdinal("EventEndDate")) : null,
+                    FoodVendingDetails = HasColumn(reader, "FoodVendingDetailsJson") && !reader.IsDBNull(reader.GetOrdinal("FoodVendingDetailsJson")) ? System.Text.Json.JsonSerializer.Deserialize<FoodVendingDetails>(reader.GetString(reader.GetOrdinal("FoodVendingDetailsJson"))) : null,
                     TradeStandBusinessType = HasColumn(reader, "TradeStandBusinessType") && !reader.IsDBNull(reader.GetOrdinal("TradeStandBusinessType")) ? reader.GetString(reader.GetOrdinal("TradeStandBusinessType")) : null,
                     CurrentStage = reader.GetString(reader.GetOrdinal("CurrentStage")),
                     Status = reader.GetString(reader.GetOrdinal("Status")),
@@ -283,6 +286,9 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
                 BusinessName = reader.GetString(reader.GetOrdinal("BusinessName")),
                 RegistrationNumber = reader.IsDBNull(reader.GetOrdinal("RegistrationNumber")) ? null : reader.GetString(reader.GetOrdinal("RegistrationNumber")),
                 LicenceType = reader.GetString(reader.GetOrdinal("LicenceType")),
+                EventStartDate = HasColumn(reader, "EventStartDate") && !reader.IsDBNull(reader.GetOrdinal("EventStartDate")) ? reader.GetDateTime(reader.GetOrdinal("EventStartDate")) : null,
+                EventEndDate = HasColumn(reader, "EventEndDate") && !reader.IsDBNull(reader.GetOrdinal("EventEndDate")) ? reader.GetDateTime(reader.GetOrdinal("EventEndDate")) : null,
+                FoodVendingDetails = HasColumn(reader, "FoodVendingDetailsJson") && !reader.IsDBNull(reader.GetOrdinal("FoodVendingDetailsJson")) ? System.Text.Json.JsonSerializer.Deserialize<FoodVendingDetails>(reader.GetString(reader.GetOrdinal("FoodVendingDetailsJson"))) : null,
                 TradeStandBusinessType = HasColumn(reader, "TradeStandBusinessType") && !reader.IsDBNull(reader.GetOrdinal("TradeStandBusinessType")) ? reader.GetString(reader.GetOrdinal("TradeStandBusinessType")) : null,
                 ApplicationFee = HasColumn(reader, "ApplicationFee") && !reader.IsDBNull(reader.GetOrdinal("ApplicationFee")) ? reader.GetDecimal(reader.GetOrdinal("ApplicationFee")) : null,
                 WardNumber = reader.IsDBNull(reader.GetOrdinal("WardNumber")) ? null : reader.GetString(reader.GetOrdinal("WardNumber")),
@@ -497,6 +503,9 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
             command.Parameters.AddWithValue("@BusinessName", request.BusinessName.Trim());
             command.Parameters.AddWithValue("@RegistrationNumber", string.IsNullOrWhiteSpace(request.RegistrationNumber) ? DBNull.Value : request.RegistrationNumber.Trim());
             command.Parameters.AddWithValue("@LicenceType", licenceType);
+            command.Parameters.AddWithValue("@EventStartDate", (object?)request.EventStartDate?.Date ?? DBNull.Value);
+            command.Parameters.AddWithValue("@EventEndDate", (object?)request.EventEndDate?.Date ?? DBNull.Value);
+            command.Parameters.AddWithValue("@FoodVendingDetailsJson", request.FoodVendingDetails is null ? DBNull.Value : System.Text.Json.JsonSerializer.Serialize(request.FoodVendingDetails));
             command.Parameters.AddWithValue("@TradeStandBusinessType", string.IsNullOrWhiteSpace(request.TradeStandBusinessType) ? DBNull.Value : request.TradeStandBusinessType.Trim());
             command.Parameters.AddWithValue("@ApplicationFee", request.ApplicationFee.HasValue ? request.ApplicationFee.Value : DBNull.Value);
             command.Parameters.AddWithValue("@WardNumber", string.IsNullOrWhiteSpace(request.WardNumber) ? DBNull.Value : request.WardNumber.Trim());
@@ -545,12 +554,16 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
         try
         {
             await using var command = datalayer.CreateStoredProcedureCommand("dbo.usp_Applications_ResubmitRejectedForCustomer");
+            command.Parameters.AddWithValue("@AreaCategory", (object?)request.AreaCategory ?? DBNull.Value);
             command.Parameters.AddWithValue("@ApplicationId", applicationId);
             command.Parameters.AddWithValue("@UserId", userId);
             command.Parameters.AddWithValue("@EmailAddress", request.Email.Trim());
             command.Parameters.AddWithValue("@MobileNumber", request.Phone.Trim());
             command.Parameters.AddWithValue("@PhysicalAddress", request.Address.Trim());
             command.Parameters.AddWithValue("@PostalAddress", string.IsNullOrWhiteSpace(request.PostalAddress) ? DBNull.Value : request.PostalAddress.Trim());
+            command.Parameters.AddWithValue("@EventStartDate", (object?)request.EventStartDate?.Date ?? DBNull.Value);
+            command.Parameters.AddWithValue("@EventEndDate", (object?)request.EventEndDate?.Date ?? DBNull.Value);
+            command.Parameters.AddWithValue("@FoodVendingDetailsJson", request.FoodVendingDetails is null ? DBNull.Value : System.Text.Json.JsonSerializer.Serialize(request.FoodVendingDetails));
             command.Parameters.AddWithValue("@TradeStandBusinessType", string.IsNullOrWhiteSpace(request.TradeStandBusinessType) ? DBNull.Value : request.TradeStandBusinessType.Trim());
             command.Parameters.AddWithValue("@Latitude", request.Latitude.HasValue ? request.Latitude.Value : DBNull.Value);
             command.Parameters.AddWithValue("@Longitude", request.Longitude.HasValue ? request.Longitude.Value : DBNull.Value);
@@ -662,6 +675,98 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
             throw CreateDatabaseException("load tariff", ex);
         }
     }
+
+    public async Task<PermitRentalFeeResponse?> GetPermitRentalFeeAsync(string businessType, string? tradingLocation)
+    {
+        try
+        {
+            await using var command = datalayer.CreateStoredProcedureCommand("dbo.usp_PermitRentalFees_Get");
+            command.Parameters.AddWithValue("@BusinessType", businessType.Trim());
+            command.Parameters.AddWithValue("@TradingLocation", string.IsNullOrWhiteSpace(tradingLocation) ? DBNull.Value : tradingLocation.Trim());
+            await command.Connection!.OpenAsync();
+            await using var reader = await command.ExecuteReaderAsync();
+            return await reader.ReadAsync()
+                ? new PermitRentalFeeResponse
+                {
+                    PermitRentalFeeId = reader.GetInt32(reader.GetOrdinal("PermitRentalFeeId")),
+                    BusinessType = reader.GetString(reader.GetOrdinal("BusinessType")),
+                    TradingLocation = reader.IsDBNull(reader.GetOrdinal("TradingLocation")) ? null : reader.GetString(reader.GetOrdinal("TradingLocation")),
+                    MonthlyFee = reader.GetDecimal(reader.GetOrdinal("MonthlyFee")),
+                    IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
+                }
+                : null;
+        }
+        catch (SqlException ex)
+        {
+            throw CreateDatabaseException("load permit rental fee", ex);
+        }
+    }
+
+    public async Task<List<PermitRentalFeeResponse>> GetPermitRentalFeesAsync()
+    {
+        var results = new List<PermitRentalFeeResponse>();
+        await using var command = datalayer.CreateTextCommand("SELECT PermitRentalFeeId, BusinessType, TradingLocation, MonthlyFee, IsActive FROM dbo.PermitRentalFees ORDER BY BusinessType, TradingLocation;");
+        await command.Connection!.OpenAsync();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync()) results.Add(MapPermitRentalFee(reader));
+        return results;
+    }
+
+    public async Task<PermitRentalFeeResponse> SavePermitRentalFeeAsync(PermitRentalFeeSaveRequest request)
+    {
+        await using var command = datalayer.CreateTextCommand("""
+            MERGE dbo.PermitRentalFees AS target USING (SELECT @BusinessType AS BusinessType, @TradingLocation AS TradingLocation) AS source
+            ON target.BusinessType = source.BusinessType AND ISNULL(target.TradingLocation, '') = ISNULL(source.TradingLocation, '')
+            WHEN MATCHED THEN UPDATE SET MonthlyFee = @MonthlyFee, IsActive = @IsActive, ModifiedDate = SYSUTCDATETIME()
+            WHEN NOT MATCHED THEN INSERT (BusinessType, TradingLocation, MonthlyFee, IsActive) VALUES (@BusinessType, @TradingLocation, @MonthlyFee, @IsActive)
+            OUTPUT inserted.PermitRentalFeeId, inserted.BusinessType, inserted.TradingLocation, inserted.MonthlyFee, inserted.IsActive;
+            """);
+        AddPermitRentalFeeParameters(command, request);
+        await command.Connection!.OpenAsync();
+        await using var reader = await command.ExecuteReaderAsync();
+        await reader.ReadAsync();
+        return MapPermitRentalFee(reader);
+    }
+
+    public async Task<PermitRentalFeeResponse?> UpdatePermitRentalFeeAsync(int permitRentalFeeId, PermitRentalFeeSaveRequest request)
+    {
+        await using var command = datalayer.CreateTextCommand("""
+            UPDATE dbo.PermitRentalFees SET BusinessType = @BusinessType, TradingLocation = @TradingLocation, MonthlyFee = @MonthlyFee, IsActive = @IsActive, ModifiedDate = SYSUTCDATETIME()
+            OUTPUT inserted.PermitRentalFeeId, inserted.BusinessType, inserted.TradingLocation, inserted.MonthlyFee, inserted.IsActive
+            WHERE PermitRentalFeeId = @PermitRentalFeeId;
+            """);
+        AddPermitRentalFeeParameters(command, request);
+        command.Parameters.AddWithValue("@PermitRentalFeeId", permitRentalFeeId);
+        await command.Connection!.OpenAsync(); await using var reader = await command.ExecuteReaderAsync();
+        return await reader.ReadAsync() ? MapPermitRentalFee(reader) : null;
+    }
+
+    public async Task<bool> DisablePermitRentalFeeAsync(int permitRentalFeeId) => await SetPermitRentalFeeActiveAsync(permitRentalFeeId, false);
+    public async Task<bool> DeletePermitRentalFeeAsync(int permitRentalFeeId)
+    {
+        await using var command = datalayer.CreateTextCommand("DELETE FROM dbo.PermitRentalFees WHERE PermitRentalFeeId = @PermitRentalFeeId;");
+        command.Parameters.AddWithValue("@PermitRentalFeeId", permitRentalFeeId); await command.Connection!.OpenAsync(); return await command.ExecuteNonQueryAsync() > 0;
+    }
+
+    private async Task<bool> SetPermitRentalFeeActiveAsync(int permitRentalFeeId, bool isActive)
+    {
+        await using var command = datalayer.CreateTextCommand("UPDATE dbo.PermitRentalFees SET IsActive = @IsActive, ModifiedDate = SYSUTCDATETIME() WHERE PermitRentalFeeId = @PermitRentalFeeId;");
+        command.Parameters.AddWithValue("@PermitRentalFeeId", permitRentalFeeId); command.Parameters.AddWithValue("@IsActive", isActive); await command.Connection!.OpenAsync(); return await command.ExecuteNonQueryAsync() > 0;
+    }
+
+    private static void AddPermitRentalFeeParameters(SqlCommand command, PermitRentalFeeSaveRequest request)
+    {
+        command.Parameters.AddWithValue("@BusinessType", request.BusinessType.Trim());
+        command.Parameters.AddWithValue("@TradingLocation", string.IsNullOrWhiteSpace(request.TradingLocation) ? DBNull.Value : request.TradingLocation.Trim());
+        command.Parameters.AddWithValue("@MonthlyFee", request.MonthlyFee); command.Parameters.AddWithValue("@IsActive", request.IsActive);
+    }
+
+    private static PermitRentalFeeResponse MapPermitRentalFee(SqlDataReader reader) => new()
+    {
+        PermitRentalFeeId = reader.GetInt32(reader.GetOrdinal("PermitRentalFeeId")), BusinessType = reader.GetString(reader.GetOrdinal("BusinessType")),
+        TradingLocation = reader.IsDBNull(reader.GetOrdinal("TradingLocation")) ? null : reader.GetString(reader.GetOrdinal("TradingLocation")),
+        MonthlyFee = reader.GetDecimal(reader.GetOrdinal("MonthlyFee")), IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
+    };
 
     public async Task<List<TariffResponse>> GetTariffsAsync()
     {
@@ -806,6 +911,9 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
             IdNumber = reader.GetString(reader.GetOrdinal("IdOrPassportNumber")),
             BusinessName = reader.GetString(reader.GetOrdinal("BusinessName")),
             LicenceType = reader.GetString(reader.GetOrdinal("LicenceType")),
+            EventStartDate = HasColumn(reader, "EventStartDate") && !reader.IsDBNull(reader.GetOrdinal("EventStartDate")) ? reader.GetDateTime(reader.GetOrdinal("EventStartDate")) : null,
+            EventEndDate = HasColumn(reader, "EventEndDate") && !reader.IsDBNull(reader.GetOrdinal("EventEndDate")) ? reader.GetDateTime(reader.GetOrdinal("EventEndDate")) : null,
+            FoodVendingDetails = HasColumn(reader, "FoodVendingDetailsJson") && !reader.IsDBNull(reader.GetOrdinal("FoodVendingDetailsJson")) ? System.Text.Json.JsonSerializer.Deserialize<FoodVendingDetails>(reader.GetString(reader.GetOrdinal("FoodVendingDetailsJson"))) : null,
             TradeStandBusinessType = HasColumn(reader, "TradeStandBusinessType") && !reader.IsDBNull(reader.GetOrdinal("TradeStandBusinessType")) ? reader.GetString(reader.GetOrdinal("TradeStandBusinessType")) : null,
             CurrentStage = reader.GetString(reader.GetOrdinal("CurrentStage")),
             Status = reader.GetString(reader.GetOrdinal("Status")),
@@ -826,6 +934,10 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
         command.Parameters.AddWithValue("@WardNumber", string.IsNullOrWhiteSpace(request.WardNumber) ? DBNull.Value : request.WardNumber.Trim());
         command.Parameters.AddWithValue("@PhysicalAddress", request.PhysicalAddress.Trim());
         command.Parameters.AddWithValue("@Notes", string.IsNullOrWhiteSpace(request.Notes) ? DBNull.Value : request.Notes.Trim());
+        var businessPhotoBytes = ParseBase64File(request.BusinessPhotoDataUrl);
+        var businessPhotoContentType = GetDataUrlContentType(request.BusinessPhotoDataUrl);
+        command.Parameters.AddWithValue("@BusinessPhotoContentType", string.IsNullOrWhiteSpace(businessPhotoContentType) ? DBNull.Value : businessPhotoContentType);
+        command.Parameters.Add("@BusinessPhotoContent", SqlDbType.VarBinary, -1).Value = businessPhotoBytes is null ? DBNull.Value : businessPhotoBytes;
         command.Parameters.AddWithValue("@CipcDocumentFileName", string.IsNullOrWhiteSpace(request.CipcDocumentFileName) ? DBNull.Value : Path.GetFileName(request.CipcDocumentFileName.Trim()));
         command.Parameters.AddWithValue("@CipcDocumentContentType", string.IsNullOrWhiteSpace(request.CipcDocumentContentType) ? DBNull.Value : request.CipcDocumentContentType.Trim());
         command.Parameters.AddWithValue("@CipcDocumentFileSizeBytes", documentBytes is null ? DBNull.Value : documentBytes.LongLength);
@@ -850,6 +962,17 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
         return Convert.FromBase64String(value);
     }
 
+    private static string? GetDataUrlContentType(string? dataUrl)
+    {
+        if (string.IsNullOrWhiteSpace(dataUrl) || !dataUrl.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var separator = dataUrl.IndexOf(';');
+        return separator > 5 ? dataUrl[5..separator] : null;
+    }
+
     private static CustomerBusinessResponse MapCustomerBusiness(SqlDataReader reader)
     {
         return new CustomerBusinessResponse
@@ -863,6 +986,7 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
             WardNumber = reader.IsDBNull(reader.GetOrdinal("WardNumber")) ? null : reader.GetString(reader.GetOrdinal("WardNumber")),
             PhysicalAddress = reader.GetString(reader.GetOrdinal("PhysicalAddress")),
             Notes = reader.IsDBNull(reader.GetOrdinal("Notes")) ? null : reader.GetString(reader.GetOrdinal("Notes")),
+            BusinessPhotoDataUrl = BuildBusinessPhotoDataUrl(reader),
             CipcDocumentFileName = HasColumn(reader, "CipcDocumentFileName") && !reader.IsDBNull(reader.GetOrdinal("CipcDocumentFileName")) ? reader.GetString(reader.GetOrdinal("CipcDocumentFileName")) : null,
             HasCipcDocument = HasColumn(reader, "HasCipcDocument") && reader.GetBoolean(reader.GetOrdinal("HasCipcDocument")),
             WorkshopAttended = HasColumn(reader, "WorkshopAttended") && reader.GetBoolean(reader.GetOrdinal("WorkshopAttended")),
@@ -873,6 +997,20 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
             IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
             CreatedDate = reader.GetDateTime(reader.GetOrdinal("CreatedDate"))
         };
+    }
+
+    private static string? BuildBusinessPhotoDataUrl(SqlDataReader reader)
+    {
+        if (!HasColumn(reader, "BusinessPhotoContent") || reader.IsDBNull(reader.GetOrdinal("BusinessPhotoContent")))
+        {
+            return null;
+        }
+
+        var photoBytes = reader.GetFieldValue<byte[]>(reader.GetOrdinal("BusinessPhotoContent"));
+        var contentType = HasColumn(reader, "BusinessPhotoContentType") && !reader.IsDBNull(reader.GetOrdinal("BusinessPhotoContentType"))
+            ? reader.GetString(reader.GetOrdinal("BusinessPhotoContentType"))
+            : "image/jpeg";
+        return $"data:{contentType};base64,{Convert.ToBase64String(photoBytes)}";
     }
 
     private static bool HasColumn(SqlDataReader reader, string columnName)

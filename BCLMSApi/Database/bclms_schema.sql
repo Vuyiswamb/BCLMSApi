@@ -391,10 +391,24 @@ BEGIN
         WardNumber NVARCHAR(20) NULL,
         PhysicalAddress NVARCHAR(300) NOT NULL,
         Notes NVARCHAR(1000) NULL,
+        BusinessPhotoContent VARBINARY(MAX) NULL,
+        BusinessPhotoContentType NVARCHAR(100) NULL,
         IsActive BIT NOT NULL CONSTRAINT DF_CustomerBusinesses_IsActive DEFAULT (1),
         CreatedDate DATETIME2(0) NOT NULL CONSTRAINT DF_CustomerBusinesses_CreatedDate DEFAULT (SYSUTCDATETIME()),
         ModifiedDate DATETIME2(0) NULL
     );
+END;
+GO
+
+IF COL_LENGTH('dbo.CustomerBusinesses', 'BusinessPhotoContent') IS NULL
+BEGIN
+    ALTER TABLE dbo.CustomerBusinesses ADD BusinessPhotoContent VARBINARY(MAX) NULL;
+END;
+GO
+
+IF COL_LENGTH('dbo.CustomerBusinesses', 'BusinessPhotoContentType') IS NULL
+BEGIN
+    ALTER TABLE dbo.CustomerBusinesses ADD BusinessPhotoContentType NVARCHAR(100) NULL;
 END;
 GO
 

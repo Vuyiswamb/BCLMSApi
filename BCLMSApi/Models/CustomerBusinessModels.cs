@@ -11,6 +11,7 @@ public class CustomerBusinessResponse
     public string? WardNumber { get; set; }
     public string PhysicalAddress { get; set; } = string.Empty;
     public string? Notes { get; set; }
+    public string? BusinessPhotoDataUrl { get; set; }
     public string? CipcDocumentFileName { get; set; }
     public bool HasCipcDocument { get; set; }
     public bool WorkshopAttended { get; set; }
@@ -30,6 +31,7 @@ public class CustomerBusinessSaveRequest
     public string? WardNumber { get; set; }
     public string PhysicalAddress { get; set; } = string.Empty;
     public string? Notes { get; set; }
+    public string? BusinessPhotoDataUrl { get; set; }
     public string? CipcDocumentFileName { get; set; }
     public string? CipcDocumentContentType { get; set; }
     public string? CipcDocumentBase64 { get; set; }

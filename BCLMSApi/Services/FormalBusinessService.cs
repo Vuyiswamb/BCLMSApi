@@ -70,6 +70,7 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
     {
         ValidateCustomerBusiness(request);
         ValidateCustomerBusinessCipcDocument(request);
+        ValidateCustomerBusinessPhoto(request);
         return formalBusinessRepository.CreateCustomerBusinessAsync(user.UserId, request);
     }
 
@@ -78,6 +79,7 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
         ValidateBusinessId(businessId);
         ValidateCustomerBusiness(request);
         ValidateCustomerBusinessCipcDocument(request);
+        ValidateCustomerBusinessPhoto(request);
         return formalBusinessRepository.UpdateCustomerBusinessAsync(user.UserId, businessId, request);
     }
 
@@ -109,6 +111,7 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
         else if (application is not null)
         {
             application.Steps = EnsureTrackingWorkshopStep(application.LicenceType, application.Steps);
+            if (IsEventLicence(application.LicenceType)) application.Steps.RemoveAll(step => IsEventExcludedInspection(step.Name));
         }
 
         return application;
@@ -141,6 +144,7 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
         else if (application is not null)
         {
             application.WorkflowSteps = EnsureInternalWorkshopStep(application);
+            if (IsEventLicence(application.LicenceType)) application.WorkflowSteps.RemoveAll(step => IsEventExcludedInspection(step.StepName));
         }
 
         return application;
@@ -254,10 +258,13 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
             var business = await formalBusinessRepository.GetCustomerBusinessAsync(userId, request.BusinessId.Value)
                 ?? throw new ArgumentException("Select a valid business from your account.");
             request.BusinessName = business.BusinessName;
-            request.RegistrationNumber = business.RegistrationNumber;
+            request.RegistrationNumber = IsEventLicence(request.LicenceType) || IsFoodVending(request.LicenceType) ? null : business.RegistrationNumber;
+            if (!IsEventLicence(request.LicenceType) && !IsFoodVending(request.LicenceType))
+            {
             request.TownshipId = business.TownshipId ?? request.TownshipId;
             request.WardNumber = business.WardNumber ?? request.WardNumber;
             request.Address = business.PhysicalAddress;
+            }
 
             if (!request.ApplicationFee.HasValue || request.ApplicationFee.Value < 0)
             {
@@ -265,8 +272,10 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
             }
 
             var licenceType = await ResolveLicenceTypeAsync(request.LicenceType, userId, request.BusinessId.Value);
+            ValidateEvent(request, licenceType);
             var workshopAttended = business.WorkshopAttended || await HasAttendedWorkshopRequestAsync(userId, request.BusinessId.Value);
             if (!licenceType.StartsWith("Formal Business", StringComparison.OrdinalIgnoreCase)
+                && (!IsEventLicence(licenceType) || request.IsSpecialEvent == true)
                 && !workshopAttended)
             {
                 throw new ArgumentException("A workshop must be attended for this Company/Business Owner before submitting this application type.");
@@ -278,6 +287,7 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
                 throw new ArgumentException("Postal address is required for Hawkers Licence applications.");
             }
 
+            await PrepareFoodVendingAsync(request, licenceType);
             ValidateTradingBusinessType(licenceType, request.TradeStandBusinessType);
 
             return await formalBusinessRepository.SubmitApplicationAsync(request, licenceType, userId);
@@ -336,13 +346,22 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
             : request.Address;
 
         var licenceType = existingApplication.LicenceType;
+        ValidateEvent(request, licenceType);
+        if (IsEventLicence(licenceType) && request.IsSpecialEvent == true)
+        {
+            var businessId = existingApplication.BusinessId ?? throw new ArgumentException("Select a business for this application.");
+            var business = await formalBusinessRepository.GetCustomerBusinessAsync(userId, businessId);
+            if (business is null || (!business.WorkshopAttended && !await HasAttendedWorkshopRequestAsync(userId, businessId)))
+                throw new ArgumentException("Workshop attendance is required for a special event.");
+        }
         if (licenceType.Contains("Hawkers", StringComparison.OrdinalIgnoreCase)
             && string.IsNullOrWhiteSpace(request.PostalAddress))
         {
             throw new ArgumentException("Postal address is required for Hawkers Licence applications.");
         }
 
-        ValidateTradingBusinessType(licenceType, request.TradeStandBusinessType);
+        await PrepareFoodVendingAsync(request, licenceType);
+            ValidateTradingBusinessType(licenceType, request.TradeStandBusinessType);
 
         return await formalBusinessRepository.ResubmitRejectedApplicationAsync(applicationId, request, licenceType, userId);
     }
@@ -555,6 +574,41 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
         }
 
         return formalBusinessRepository.GetTariffAsync(normalizedLicenceType, normalizedApplicationKind);
+    }
+
+    public Task<PermitRentalFeeResponse?> GetPermitRentalFeeAsync(string businessType, string? tradingLocation)
+    {
+        if (string.IsNullOrWhiteSpace(businessType))
+        {
+            throw new ArgumentException("A trade stand business type is required.");
+        }
+
+        return formalBusinessRepository.GetPermitRentalFeeAsync(businessType, tradingLocation);
+    }
+
+    public Task<List<PermitRentalFeeResponse>> GetPermitRentalFeesAsync(UserTokenPayload user)
+    {
+        RequireSuperUser(user); return formalBusinessRepository.GetPermitRentalFeesAsync();
+    }
+
+    public Task<PermitRentalFeeResponse> SavePermitRentalFeeAsync(UserTokenPayload user, PermitRentalFeeSaveRequest request)
+    {
+        RequireSuperUser(user); ValidatePermitRentalFee(request); return formalBusinessRepository.SavePermitRentalFeeAsync(request);
+    }
+
+    public Task<PermitRentalFeeResponse?> UpdatePermitRentalFeeAsync(UserTokenPayload user, int permitRentalFeeId, PermitRentalFeeSaveRequest request)
+    {
+        RequireSuperUser(user); ValidatePermitRentalFee(request); return formalBusinessRepository.UpdatePermitRentalFeeAsync(permitRentalFeeId, request);
+    }
+
+    public Task<bool> DisablePermitRentalFeeAsync(UserTokenPayload user, int permitRentalFeeId)
+    {
+        RequireSuperUser(user); return formalBusinessRepository.DisablePermitRentalFeeAsync(permitRentalFeeId);
+    }
+
+    public Task<bool> DeletePermitRentalFeeAsync(UserTokenPayload user, int permitRentalFeeId)
+    {
+        RequireSuperUser(user); return formalBusinessRepository.DeletePermitRentalFeeAsync(permitRentalFeeId);
     }
 
     public Task<List<TariffResponse>> GetTariffsAsync(UserTokenPayload user)
@@ -895,7 +949,7 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
                 ("Workshop", "Compliance Officer"),
                 ("Application Submitted", "Compliance Officer"),
                 ("Home Affairs Verification", "Compliance Officer"),
-                ("TMPD Inspection (Site Inspection)", siteInspectionGroup),
+                .. (IsEventLicence(licenceType) ? Array.Empty<(string, string)>() : new[] { ("TMPD Inspection (Site Inspection)", siteInspectionGroup) }),
                 ("Admin Approval", "Admin Officer"),
                 ("Functional Head Approval", "Functional Head"),
                 ("Director Approval", "Director"),
@@ -921,15 +975,125 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
 
     private static string SiteInspectionGroup(string? areaCategory)
     {
-        var category = areaCategory ?? string.Empty;
-        return category.Contains("Restricted", StringComparison.OrdinalIgnoreCase)
-            && !category.Contains("Non Restricted", StringComparison.OrdinalIgnoreCase)
-            && !category.Contains("Non-Restricted", StringComparison.OrdinalIgnoreCase)
-            && !category.Contains("Non Declared", StringComparison.OrdinalIgnoreCase)
-            && !category.Contains("Non-Declared", StringComparison.OrdinalIgnoreCase)
-            ? "Compliance Officer"
-            : "Metro Police";
+        return "Metro Police";
     }
+
+    private static void ValidateCustomerBusinessPhoto(CustomerBusinessSaveRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.BusinessPhotoDataUrl))
+        {
+            return;
+        }
+
+        var value = request.BusinessPhotoDataUrl.Trim();
+        if (!value.StartsWith("data:image/jpeg;base64,", StringComparison.OrdinalIgnoreCase)
+            && !value.StartsWith("data:image/png;base64,", StringComparison.OrdinalIgnoreCase)
+            && !value.StartsWith("data:image/webp;base64,", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("Business profile photos must be JPG, PNG, or WebP images.");
+        }
+
+        try
+        {
+            var encodedPhoto = value[(value.IndexOf(',') + 1)..];
+            if (Convert.FromBase64String(encodedPhoto).LongLength > 2 * 1024 * 1024)
+            {
+                throw new ArgumentException("Business profile photos may not exceed 2 MB.");
+            }
+        }
+        catch (FormatException)
+        {
+            throw new ArgumentException("The business profile photo is not valid image data.");
+        }
+    }
+
+    private static bool IsEventExcludedInspection(string name) =>
+        name.Equals("TMPD Inspection (Site Inspection)", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Compliance Officer Inspection", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsEventLicence(string licenceType) =>
+        System.Text.RegularExpressions.Regex.IsMatch(licenceType, "events? licen[cs]e", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    private static void ValidateEvent(ApplicationSubmitRequest request, string licenceType)
+    {
+        if (!IsEventLicence(licenceType))
+        {
+            request.EventStartDate = null;
+            request.EventEndDate = null;
+            return;
+        }
+        if (!request.EventStartDate.HasValue || !request.EventEndDate.HasValue)
+            throw new ArgumentException("Event start and end dates are required.");
+        request.EventStartDate = request.EventStartDate.Value.Date;
+        request.EventEndDate = request.EventEndDate.Value.Date;
+        if (request.EventEndDate < request.EventStartDate)
+            throw new ArgumentException("Event end date must be on or after the start date.");
+        if (!request.IsSpecialEvent.HasValue)
+            throw new ArgumentException("Select whether this is a special event.");
+        if (string.IsNullOrWhiteSpace(request.Address))
+            throw new ArgumentException("Event Location is required.");
+        var options = new[] { "Prepared Food", "Snacks & Soft Drinks", "Merchandise" };
+        if (!options.Contains(request.TradeStandBusinessType?.Trim(), StringComparer.Ordinal))
+            throw new ArgumentException("Select a valid event business type.");
+        request.RegistrationNumber = null;
+        var notes = System.Text.RegularExpressions.Regex.Replace(request.Notes ?? "", @"^Special event: (Yes|No)\r?\n?", "", System.Text.RegularExpressions.RegexOptions.Multiline).Trim();
+        request.Notes = $"Special event: {(request.IsSpecialEvent.Value ? "Yes" : "No")}\n{notes}".Trim();
+    }
+
+    private static void ValidatePermitRentalFee(PermitRentalFeeSaveRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.BusinessType)) throw new ArgumentException("Select a business type.");
+        if (request.MonthlyFee < 0) throw new ArgumentException("The monthly rental fee cannot be negative.");
+    }
+
+    private static bool IsFoodVending(string licenceType) => licenceType.Contains("Food Vending", StringComparison.OrdinalIgnoreCase);
+
+    private async Task PrepareFoodVendingAsync(ApplicationSubmitRequest request, string licenceType)
+    {
+        if (!IsFoodVending(licenceType)) { request.FoodVendingDetails = null; return; }
+        var details = request.FoodVendingDetails ?? throw new ArgumentException("Select food vending items and trailer use.");
+        if (!details.UsesTrailer.HasValue) throw new ArgumentException("Select Yes or No for Food Vending Trailer.");
+        ValidateFoodItems(details.BreakfastItems, ["Eggs", "Bacon", "Sausages", "Boerewors rolls", "Bread / Toast", "Fat cakes", "Porridge"]);
+        ValidateFoodItems(details.CookedFoodItems, ["Pap", "Rice", "Chicken", "Beef", "Stew", "Vegetables", "Chips"]);
+        ValidateFoodItems(details.RefreshmentsItems, ["Water", "Soft drinks", "Juice", "Tea", "Coffee"]);
+        if (details.BreakfastItems.Count + details.CookedFoodItems.Count + details.RefreshmentsItems.Count == 0)
+            throw new ArgumentException("Select at least one food or refreshment item.");
+        if (!request.Latitude.HasValue || !request.Longitude.HasValue) throw new ArgumentException("Pin the food vending location on the map.");
+        request.RegistrationNumber = null;
+        request.TradeStandBusinessType = null;
+        request.AreaCategory = await IsRestrictedFoodLocationAsync((double)request.Latitude.Value, (double)request.Longitude.Value) ? "Restricted" : "Non Restricted";
+    }
+
+    private static void ValidateFoodItems(List<string>? items, string[] allowed)
+    {
+        if (items is null || items.Count > allowed.Length || items.Distinct().Count() != items.Count || items.Any(item => !allowed.Contains(item)))
+            throw new ArgumentException("Select valid food vending items.");
+    }
+
+    private async Task<bool> IsRestrictedFoodLocationAsync(double latitude, double longitude)
+    {
+        await using var command = datalayer.CreateStoredProcedureCommand("dbo.usp_RestrictedTradingAreas_GetAll");
+        await command.Connection!.OpenAsync();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            if (reader.IsDBNull(reader.GetOrdinal("GeometryJson"))) continue;
+            var points = System.Text.Json.JsonSerializer.Deserialize<List<FoodMapPoint>>(reader.GetString(reader.GetOrdinal("GeometryJson")), new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (points is null || points.Count < 3) continue;
+            var inside = false;
+            for (int i = 0, j = points.Count - 1; i < points.Count; j = i++)
+            {
+                var current = points[i]; var previous = points[j];
+                if ((current.Latitude > latitude) != (previous.Latitude > latitude)
+                    && longitude < (previous.Longitude - current.Longitude) * (latitude - current.Latitude) / (previous.Latitude - current.Latitude) + current.Longitude)
+                    inside = !inside;
+            }
+            if (inside) return true;
+        }
+        return false;
+    }
+
+    private sealed class FoodMapPoint { public double Latitude { get; set; } public double Longitude { get; set; } }
 
     private static void ValidateTradingBusinessType(string licenceType, string? businessType)
     {
@@ -956,6 +1120,6 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
     {
         return licenceType.Contains("Trade Stand", StringComparison.OrdinalIgnoreCase)
             || licenceType.Contains("Hawkers", StringComparison.OrdinalIgnoreCase)
-            || licenceType.Contains("Food Vending", StringComparison.OrdinalIgnoreCase);
+;
     }
 }

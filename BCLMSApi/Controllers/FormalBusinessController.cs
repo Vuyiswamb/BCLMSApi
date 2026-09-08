@@ -50,6 +50,22 @@ public class FormalBusinessController(IFormalBusinessService formalBusinessServi
         }
     }
 
+    [HttpGet("permit-rental-fee")]
+    public async Task<ActionResult<PermitRentalFeeResponse>> GetPermitRentalFee([FromQuery] string businessType, [FromQuery] string? tradingLocation)
+    {
+        try
+        {
+            var fee = await formalBusinessService.GetPermitRentalFeeAsync(businessType, tradingLocation);
+            return fee is null
+                ? NotFound(new { message = "No monthly permit rental fee is configured for this business type and location." })
+                : Ok(fee);
+        }
+        catch (ArgumentException error)
+        {
+            return BadRequest(new { message = error.Message });
+        }
+    }
+
     [HttpGet("tariffs/internal")]
     public async Task<ActionResult<List<TariffResponse>>> GetTariffs()
     {
@@ -71,6 +87,53 @@ public class FormalBusinessController(IFormalBusinessService formalBusinessServi
         {
             return StatusCode(StatusCodes.Status500InternalServerError, new { message = error.InnerException?.Message ?? error.Message });
         }
+    }
+
+    [HttpGet("permit-rental-fees/internal")]
+    public async Task<ActionResult<List<PermitRentalFeeResponse>>> GetPermitRentalFees()
+    {
+        var user = userTokenService.GetValidTokenPayload(Request.Headers.Authorization);
+        if (user is null) return StatusCode(StatusCodes.Status403Forbidden, new { message = "Login is required to load permit rental fees." });
+        try { return Ok(await formalBusinessService.GetPermitRentalFeesAsync(user)); }
+        catch (UnauthorizedAccessException error) { return StatusCode(StatusCodes.Status403Forbidden, new { message = error.Message }); }
+    }
+
+    [HttpPost("permit-rental-fees")]
+    public async Task<ActionResult<PermitRentalFeeResponse>> SavePermitRentalFee(PermitRentalFeeSaveRequest request)
+    {
+        var user = userTokenService.GetValidTokenPayload(Request.Headers.Authorization);
+        if (user is null) return StatusCode(StatusCodes.Status403Forbidden, new { message = "Login is required to save permit rental fees." });
+        try { return Ok(await formalBusinessService.SavePermitRentalFeeAsync(user, request)); }
+        catch (ArgumentException error) { return BadRequest(new { message = error.Message }); }
+        catch (UnauthorizedAccessException error) { return StatusCode(StatusCodes.Status403Forbidden, new { message = error.Message }); }
+    }
+
+    [HttpPut("permit-rental-fees/{permitRentalFeeId:int}")]
+    public async Task<ActionResult<PermitRentalFeeResponse>> UpdatePermitRentalFee(int permitRentalFeeId, PermitRentalFeeSaveRequest request)
+    {
+        var user = userTokenService.GetValidTokenPayload(Request.Headers.Authorization);
+        if (user is null) return StatusCode(StatusCodes.Status403Forbidden, new { message = "Login is required to update permit rental fees." });
+        try { var fee = await formalBusinessService.UpdatePermitRentalFeeAsync(user, permitRentalFeeId, request); return fee is null ? NotFound() : Ok(fee); }
+        catch (ArgumentException error) { return BadRequest(new { message = error.Message }); }
+        catch (UnauthorizedAccessException error) { return StatusCode(StatusCodes.Status403Forbidden, new { message = error.Message }); }
+    }
+
+    [HttpPost("permit-rental-fees/{permitRentalFeeId:int}/disable")]
+    public async Task<ActionResult> DisablePermitRentalFee(int permitRentalFeeId)
+    {
+        var user = userTokenService.GetValidTokenPayload(Request.Headers.Authorization);
+        if (user is null) return StatusCode(StatusCodes.Status403Forbidden);
+        try { return await formalBusinessService.DisablePermitRentalFeeAsync(user, permitRentalFeeId) ? Ok() : NotFound(); }
+        catch (UnauthorizedAccessException error) { return StatusCode(StatusCodes.Status403Forbidden, new { message = error.Message }); }
+    }
+
+    [HttpDelete("permit-rental-fees/{permitRentalFeeId:int}")]
+    public async Task<ActionResult> DeletePermitRentalFee(int permitRentalFeeId)
+    {
+        var user = userTokenService.GetValidTokenPayload(Request.Headers.Authorization);
+        if (user is null) return StatusCode(StatusCodes.Status403Forbidden);
+        try { return await formalBusinessService.DeletePermitRentalFeeAsync(user, permitRentalFeeId) ? Ok() : NotFound(); }
+        catch (UnauthorizedAccessException error) { return StatusCode(StatusCodes.Status403Forbidden, new { message = error.Message }); }
     }
 
     [HttpPost("tariffs")]

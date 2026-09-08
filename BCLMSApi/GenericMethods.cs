@@ -361,39 +361,51 @@ public static class GenericMethods
 	{
 	}
 
-	public static void SendEmail(string from, string to, string subject, string body)
-	{
-		try
-		{
-            using (SmtpClient smtpClient = new SmtpClient("192.168.190.73", 25))
-
+    public static async Task SendEmail_Office365Async(string to, string subject, string body)
+    {
+        try
+        {
+            using (SmtpClient smtpClient = new SmtpClient("smtp.office365.com", 587))
+            using (MailMessage mailMessage = new MailMessage())
             {
-                MailMessage mailMessage = new MailMessage
-                {
-                    From = new MailAddress("BCLMS@TSHWANE.GOV.ZA"),
-
-                    Subject = subject,
-                    Body = body,
-                    IsBodyHtml = true
-                };
+                mailMessage.From = new MailAddress("Ithuba@TSHWANE.GOV.ZA");
                 mailMessage.To.Add(new MailAddress(to));
-  
-                smtpClient.EnableSsl = false;
+                mailMessage.Subject = subject;
+                mailMessage.Body = body;
+                mailMessage.IsBodyHtml = true;
+
+                smtpClient.EnableSsl = true;
                 smtpClient.UseDefaultCredentials = false;
-                smtpClient.Credentials = new NetworkCredential("BCLMS@TSHWANE.GOV.ZA", "#ICT*support#");
-                ServicePointManager.ServerCertificateValidationCallback =
-                (object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors) => true;
+                smtpClient.Credentials = new NetworkCredential("Ithuba@TSHWANE.GOV.ZA", "Qf9!tZ3p@Lw8");
+                smtpClient.Timeout = 60000;
 
-                smtpClient.Send(mailMessage);
-                return;
+                await smtpClient.SendMailAsync(mailMessage);
+                Console.WriteLine($"Email sent successfully to: {to}");
+
+
+                //using (SmtpClient smtpClient = new SmtpClient("smtp.office365.com", 587))
+                //using (MailMessage mailMessage = new MailMessage())
+                //{
+                //    mailMessage.From = new MailAddress("BCR@TSHWANE.GOV.ZA");
+                //    mailMessage.To.Add(new MailAddress(to));
+                //    mailMessage.Subject = subject;
+                //    mailMessage.Body = body;
+                //    mailMessage.IsBodyHtml = true;
+
+                //    smtpClient.EnableSsl = true;
+                //    smtpClient.UseDefaultCredentials = false;
+                //    smtpClient.Credentials = new NetworkCredential("BCR@TSHWANE.GOV.ZA", "T$hwane12345");
+                //    smtpClient.Timeout = 60000;
+
+                //    await smtpClient.SendMailAsync(mailMessage);
+                //    Console.WriteLine($"Email sent successfully to: {to}");
+                }
             }
+        catch (SmtpException ex)
+        {
+            throw new Exception($"SMTP Error sending email to {to}: {ex.Message}", ex);
         }
-		catch (SmtpException ex)
-		{
-			throw ex;
-		}
-	}
-
+    }
 
     public static async Task SendEmailAsync(string to, string subject, string body)
     {
@@ -402,7 +414,7 @@ public static class GenericMethods
             using (SmtpClient smtpClient = new SmtpClient("smtp.office365.com", 587))
             using (MailMessage mailMessage = new MailMessage())
             {
-                mailMessage.From = new MailAddress("BCLMS@TSHWANE.GOV.ZA");
+                mailMessage.From = new MailAddress("Ithuba@TSHWANE.GOV.ZA");
                 mailMessage.To.Add(new MailAddress(to));
                 mailMessage.Subject = subject;
                 mailMessage.Body = body;
@@ -410,7 +422,7 @@ public static class GenericMethods
 
                 smtpClient.EnableSsl = true;
                 smtpClient.UseDefaultCredentials = false;
-                smtpClient.Credentials = new NetworkCredential("BCLMS@TSHWANE.GOV.ZA", "#ICT*support#");
+                smtpClient.Credentials = new NetworkCredential("Ithuba@TSHWANE.GOV.ZA", "#ICT*support#");
                 smtpClient.Timeout = 60000;
 
                 await smtpClient.SendMailAsync(mailMessage);
@@ -423,34 +435,6 @@ public static class GenericMethods
         }
     }
 
-
-    public static async Task SendEmail_Office365Async(string to, string subject, string body)
-    {
-        try
-        {
-            using (SmtpClient smtpClient = new SmtpClient("smtp.office365.com", 587))
-            using (MailMessage mailMessage = new MailMessage())
-            {
-                mailMessage.From = new MailAddress("BCLMS@TSHWANE.GOV.ZA");
-                mailMessage.To.Add(new MailAddress(to));
-                mailMessage.Subject = subject;
-                mailMessage.Body = body;
-                mailMessage.IsBodyHtml = true;
-
-                smtpClient.EnableSsl = true;
-                smtpClient.UseDefaultCredentials = false;
-                smtpClient.Credentials = new NetworkCredential("BCLMS@TSHWANE.GOV.ZA", "Qf9!tZ3p@Lw8");
-                smtpClient.Timeout = 60000;
-
-                await smtpClient.SendMailAsync(mailMessage);
-                Console.WriteLine($"Email sent successfully to: {to}");
-            }
-        }
-        catch (SmtpException ex)
-        {
-            throw new Exception($"SMTP Error sending email to {to}: {ex.Message}", ex);
-        }
-    }
 
     public static string BuildHtmlPasswordRecovery(string Fullname, string Username, string Password)
     {
@@ -503,7 +487,7 @@ public static class GenericMethods
 
             <p>If you did not request this recovery, please contact our support team immediately:</p>
             <p style='background:#fff8e1; padding:15px; border-radius:6px; text-align:center; font-size:15px;'>
-                Email: <a href='mailto:BCLMS@tshwane.gov.za'>ithuba@tshwane.gov.za</a><br>
+                Email: <a href='mailto:Ithuba@TSHWANE.GOV.ZA'>ithuba@tshwane.gov.za</a><br>
                 Tel: <strong>012 358 1634 / 5700 / 5587</strong>
             </p>
         </div>
@@ -513,7 +497,7 @@ public static class GenericMethods
             <p><strong>City of Tshwane • Economic Development Division</strong><br>
             6th Floor, Middestad Building, 252 Thabo Sehume Street, Pretoria, 0002<br>
             PO Box 6338, Pretoria, 0001</p>
-            <p>Tel: 012 358 1634 / 5700 / 5587 | Email: <a href='mailto:BCLMS@tshwane.gov.za'>ithuba@tshwane.gov.za</a></p>
+            <p>Tel: 012 358 1634 / 5700 / 5587 | Email: <a href='mailto:Ithuba@TSHWANE.GOV.ZA'>ithuba@tshwane.gov.za</a></p>
             <p>© {DateTime.Now.Year} City of Tshwane. All rights reserved.</p>
             <p style='color:#999; font-size:11px;'>This is an automated message from the Ithuba Youth Portal. Please do not reply.</p>
         </div>
@@ -601,7 +585,7 @@ public static class GenericMethods
             <p><strong>City of Tshwane • Economic Development Division</strong><br>
             6th Floor, Middestad Building, 252 Thabo Sehume Street, Pretoria, 0002<br>
             PO Box 6338, Pretoria, 0001</p>
-            <p>Tel: 012 358 1634 / 5700 / 5587 | Email: <a href='mailto:BCLMS@tshwane.gov.za'>ithuba@tshwane.gov.za</a></p>
+            <p>Tel: 012 358 1634 / 5700 / 5587 | Email: <a href='mailto:Ithuba@TSHWANE.GOV.ZA'>ithuba@tshwane.gov.za</a></p>
             <p>© {DateTime.Now.Year} City of Tshwane. All rights reserved.</p>
             <p style='color:#999; font-size:11px;'>This is an automated welcome message from the Ithuba Youth Programme.</p>
         </div>
@@ -691,7 +675,7 @@ public static class GenericMethods
             <p><strong>City of Tshwane • Economic Development Division</strong><br>
             6th Floor, Middestad Building, 252 Thabo Sehume Street, Pretoria, 0002<br>
             PO Box 6338, Pretoria, 0001</p>
-            <p>Tel: 012 358 1634 / 5700 / 5587 | Email: <a href='mailto:BCLMS@tshwane.gov.za'>BCLMS@tshwane.gov.za</a></p>
+            <p>Tel: 012 358 1634 / 5700 / 5587 | Email: <a href='mailto:Ithuba@TSHWANE.GOV.ZA'>Ithuba@TSHWANE.GOV.ZA</a></p>
             <p>© {DateTime.Now.Year} City of Tshwane. All rights reserved.</p>
         </div>
     </div>

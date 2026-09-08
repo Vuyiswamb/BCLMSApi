@@ -19,6 +19,18 @@ BEGIN
 END;
 GO
 
+IF COL_LENGTH('dbo.CustomerBusinesses', 'BusinessPhotoContent') IS NULL
+BEGIN
+    ALTER TABLE dbo.CustomerBusinesses ADD BusinessPhotoContent VARBINARY(MAX) NULL;
+END;
+GO
+
+IF COL_LENGTH('dbo.CustomerBusinesses', 'BusinessPhotoContentType') IS NULL
+BEGIN
+    ALTER TABLE dbo.CustomerBusinesses ADD BusinessPhotoContentType NVARCHAR(100) NULL;
+END;
+GO
+
 IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_CustomerBusinessCipcDocuments_CustomerBusinesses')
 BEGIN
     ALTER TABLE dbo.CustomerBusinessCipcDocuments
@@ -48,6 +60,8 @@ BEGIN
         businesses.WardNumber,
         businesses.PhysicalAddress,
         businesses.Notes,
+        businesses.BusinessPhotoContent,
+        businesses.BusinessPhotoContentType,
         cipcDocuments.OriginalFileName AS CipcDocumentFileName,
         CONVERT(BIT, CASE WHEN cipcDocuments.CipcDocumentId IS NULL THEN 0 ELSE 1 END) AS HasCipcDocument,
         businesses.IsActive,
@@ -84,6 +98,8 @@ BEGIN
         businesses.WardNumber,
         businesses.PhysicalAddress,
         businesses.Notes,
+        businesses.BusinessPhotoContent,
+        businesses.BusinessPhotoContentType,
         cipcDocuments.OriginalFileName AS CipcDocumentFileName,
         CONVERT(BIT, CASE WHEN cipcDocuments.CipcDocumentId IS NULL THEN 0 ELSE 1 END) AS HasCipcDocument,
         businesses.IsActive,
@@ -111,6 +127,8 @@ CREATE OR ALTER PROCEDURE dbo.usp_CustomerBusinesses_Create
     @WardNumber NVARCHAR(20) = NULL,
     @PhysicalAddress NVARCHAR(300),
     @Notes NVARCHAR(1000) = NULL,
+    @BusinessPhotoContentType NVARCHAR(100) = NULL,
+    @BusinessPhotoContent VARBINARY(MAX) = NULL,
     @CipcDocumentFileName NVARCHAR(260) = NULL,
     @CipcDocumentContentType NVARCHAR(100) = NULL,
     @CipcDocumentFileSizeBytes BIGINT = NULL,
@@ -130,7 +148,9 @@ BEGIN
         TownshipId,
         WardNumber,
         PhysicalAddress,
-        Notes
+        Notes,
+        BusinessPhotoContentType,
+        BusinessPhotoContent
     )
     OUTPUT INSERTED.BusinessId INTO @CreatedBusiness(BusinessId)
     VALUES
@@ -141,7 +161,9 @@ BEGIN
         @TownshipId,
         NULLIF(@WardNumber, ''),
         @PhysicalAddress,
-        NULLIF(@Notes, '')
+        NULLIF(@Notes, ''),
+        NULLIF(@BusinessPhotoContentType, ''),
+        @BusinessPhotoContent
     );
 
     IF @CipcDocumentFileContent IS NOT NULL
@@ -177,6 +199,8 @@ BEGIN
         businesses.WardNumber,
         businesses.PhysicalAddress,
         businesses.Notes,
+        businesses.BusinessPhotoContent,
+        businesses.BusinessPhotoContentType,
         cipcDocuments.OriginalFileName AS CipcDocumentFileName,
         CONVERT(BIT, CASE WHEN cipcDocuments.CipcDocumentId IS NULL THEN 0 ELSE 1 END) AS HasCipcDocument,
         businesses.IsActive,
@@ -203,6 +227,8 @@ CREATE OR ALTER PROCEDURE dbo.usp_CustomerBusinesses_Update
     @WardNumber NVARCHAR(20) = NULL,
     @PhysicalAddress NVARCHAR(300),
     @Notes NVARCHAR(1000) = NULL,
+    @BusinessPhotoContentType NVARCHAR(100) = NULL,
+    @BusinessPhotoContent VARBINARY(MAX) = NULL,
     @CipcDocumentFileName NVARCHAR(260) = NULL,
     @CipcDocumentContentType NVARCHAR(100) = NULL,
     @CipcDocumentFileSizeBytes BIGINT = NULL,
@@ -220,6 +246,8 @@ BEGIN
         WardNumber = NULLIF(@WardNumber, ''),
         PhysicalAddress = @PhysicalAddress,
         Notes = NULLIF(@Notes, ''),
+        BusinessPhotoContent = COALESCE(@BusinessPhotoContent, BusinessPhotoContent),
+        BusinessPhotoContentType = CASE WHEN @BusinessPhotoContent IS NULL THEN BusinessPhotoContentType ELSE NULLIF(@BusinessPhotoContentType, '') END,
         ModifiedDate = SYSUTCDATETIME()
     WHERE BusinessId = @BusinessId
       AND UserId = @UserId

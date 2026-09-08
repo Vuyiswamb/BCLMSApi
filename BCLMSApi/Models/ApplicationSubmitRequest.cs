@@ -18,6 +18,14 @@ public class ApplicationSubmitRequest
 
     public string LicenceType { get; set; } = string.Empty;
 
+    public bool? IsSpecialEvent { get; set; }
+
+    public DateTime? EventStartDate { get; set; }
+
+    public DateTime? EventEndDate { get; set; }
+
+    public FoodVendingDetails? FoodVendingDetails { get; set; }
+
     public string? TradeStandBusinessType { get; set; }
 
     public decimal? ApplicationFee { get; set; }

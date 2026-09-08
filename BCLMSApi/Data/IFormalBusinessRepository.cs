@@ -48,6 +48,14 @@ public interface IFormalBusinessRepository
 
     Task<TariffResponse?> GetTariffAsync(string licenceType, string applicationKind);
 
+    Task<PermitRentalFeeResponse?> GetPermitRentalFeeAsync(string businessType, string? tradingLocation);
+
+    Task<List<PermitRentalFeeResponse>> GetPermitRentalFeesAsync();
+    Task<PermitRentalFeeResponse> SavePermitRentalFeeAsync(PermitRentalFeeSaveRequest request);
+    Task<PermitRentalFeeResponse?> UpdatePermitRentalFeeAsync(int permitRentalFeeId, PermitRentalFeeSaveRequest request);
+    Task<bool> DisablePermitRentalFeeAsync(int permitRentalFeeId);
+    Task<bool> DeletePermitRentalFeeAsync(int permitRentalFeeId);
+
     Task<List<TariffResponse>> GetTariffsAsync();
 
     Task<TariffResponse> SaveTariffAsync(TariffSaveRequest request);

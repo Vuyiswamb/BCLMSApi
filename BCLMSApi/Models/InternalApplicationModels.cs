@@ -12,6 +12,12 @@ public class InternalApplicationSummaryResponse
 
     public string LicenceType { get; set; } = string.Empty;
 
+    public DateTime? EventStartDate { get; set; }
+
+    public DateTime? EventEndDate { get; set; }
+
+    public FoodVendingDetails? FoodVendingDetails { get; set; }
+
     public string? TradeStandBusinessType { get; set; }
 
     public string CurrentStage { get; set; } = string.Empty;

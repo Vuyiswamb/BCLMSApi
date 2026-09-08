@@ -7,17 +7,25 @@ namespace BCLMSApi.Services;
 
 public class SystemSettingsService(Datalayer datalayer, IConfiguration configuration) : ISystemSettingsService
 {
+    private const string EmailHostKey = "Email.Office365.Host";
+    private const string EmailPortKey = "Email.Office365.Port";
+    private const string EmailFromAddressKey = "Email.Office365.FromAddress";
+    private const string EmailUsernameKey = "Email.Office365.Username";
     private const string EmailPasswordKey = "Email.Office365.Password";
 
     public async Task<EmailSettingsResponse> GetEmailSettingsAsync()
     {
+        var host = await GetSettingAsync(EmailHostKey) ?? configuration["Email:Office365:Host"] ?? "smtp.office365.com";
+        var port = await GetSettingAsync(EmailPortKey) ?? configuration["Email:Office365:Port"] ?? "587";
+        var fromAddress = await GetSettingAsync(EmailFromAddressKey) ?? configuration["Email:Office365:FromAddress"] ?? "Ithuba@TSHWANE.GOV.ZA";
+        var username = await GetSettingAsync(EmailUsernameKey) ?? configuration["Email:Office365:Username"] ?? fromAddress;
         var password = await GetEmailPasswordAsync();
         return new EmailSettingsResponse
         {
-            Host = configuration["Email:Office365:Host"] ?? "smtp.office365.com",
-            Port = configuration["Email:Office365:Port"] ?? "587",
-            FromAddress = configuration["Email:Office365:FromAddress"] ?? "Ithuba@TSHWANE.GOV.ZA",
-            Username = configuration["Email:Office365:Username"] ?? "Ithuba@TSHWANE.GOV.ZA",
+            Host = host,
+            Port = port,
+            FromAddress = fromAddress,
+            Username = username,
             HasPassword = !string.IsNullOrWhiteSpace(password),
             PasswordMask = string.IsNullOrWhiteSpace(password) ? "Not configured" : "********",
             Password = password ?? string.Empty
@@ -26,6 +34,11 @@ public class SystemSettingsService(Datalayer datalayer, IConfiguration configura
 
     public async Task<EmailSettingsResponse> UpdateEmailSettingsAsync(EmailSettingsUpdateRequest request)
     {
+        await SaveSettingAsync(EmailHostKey, request.Host.Trim(), isSecret: false);
+        await SaveSettingAsync(EmailPortKey, request.Port.Trim(), isSecret: false);
+        await SaveSettingAsync(EmailFromAddressKey, request.FromAddress.Trim(), isSecret: false);
+        await SaveSettingAsync(EmailUsernameKey, request.Username.Trim(), isSecret: false);
+
         if (!string.IsNullOrWhiteSpace(request.Password))
         {
             await SaveSettingAsync(EmailPasswordKey, Protect(request.Password.Trim()), isSecret: true);
