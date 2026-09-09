@@ -69,7 +69,7 @@ public class PermitVerificationController(Datalayer datalayer, IFormalBusinessRe
         return Ok(new { permitNumber = application.TrackingNumber, holderName = application.ApplicantName,
             businessName = application.BusinessName, licenceType = application.LicenceType, status, isValid = status == "Valid", validFrom = issued,
             validUntil = expires, address = application.PhysicalAddress, latitude = application.Latitude,
-            longitude = application.Longitude, stalls, photoAvailable = await HasPhoto(application.ApplicationId) });
+            longitude = application.Longitude, stalls, photoAvailable = await ReadPhoto(application.ApplicationId, includeContent: false) is not null });
     }
 
     [AllowAnonymous]
@@ -78,14 +78,10 @@ public class PermitVerificationController(Datalayer datalayer, IFormalBusinessRe
     {
         var application = await FindPermit(token);
         if (application is null) return NotFound();
-        if (!await HasPhoto(application.ApplicationId)) return NotFound();
-        await using var command = datalayer.CreateTextCommand("SELECT ContentType, FileContent FROM dbo.PermitHolderPhotos WHERE ApplicationId = @ApplicationId");
-        command.Parameters.AddWithValue("@ApplicationId", application.ApplicationId);
-        await command.Connection!.OpenAsync();
-        await using var reader = await command.ExecuteReaderAsync();
-        if (!await reader.ReadAsync()) return NotFound();
+        var photo = await ReadPhoto(application.ApplicationId, includeContent: true);
+        if (photo?.Content is null) return NotFound();
         Response.Headers["X-Content-Type-Options"] = "nosniff";
-        return File((byte[])reader["FileContent"], reader.GetString(0));
+        return File(photo.Value.Content, photo.Value.ContentType);
     }
 
     [HttpPost("applications/{applicationId:int}/photo")]
@@ -131,15 +127,38 @@ public class PermitVerificationController(Datalayer datalayer, IFormalBusinessRe
         return Ok(new { message = "Permit holder photo saved. It will appear when the permit QR code is scanned." });
     }
 
-    private async Task<bool> HasPhoto(int applicationId)
+    // Keep availability and delivery on the same lookup, scoped to the signed application.
+    // An explicitly uploaded permit photo takes precedence over its linked business photo.
+    private async Task<(string ContentType, byte[]? Content)?> ReadPhoto(int applicationId, bool includeContent)
     {
         await using var command = datalayer.CreateTextCommand("""
-            IF OBJECT_ID('dbo.PermitHolderPhotos', 'U') IS NULL SELECT CAST(0 AS BIT);
-            ELSE EXEC sp_executesql N'SELECT CAST(CASE WHEN EXISTS (SELECT 1 FROM dbo.PermitHolderPhotos WHERE ApplicationId = @Id) THEN 1 ELSE 0 END AS BIT)', N'@Id INT', @Id = @ApplicationId;
+            DECLARE @Found BIT = 0;
+            IF OBJECT_ID('dbo.PermitHolderPhotos', 'U') IS NOT NULL
+                EXEC sys.sp_executesql N'
+                    IF EXISTS (SELECT 1 FROM dbo.PermitHolderPhotos WHERE ApplicationId = @Id AND DATALENGTH(FileContent) > 0)
+                    BEGIN
+                        SELECT ContentType, CASE WHEN @Include = 1 THEN FileContent ELSE NULL END AS FileContent
+                        FROM dbo.PermitHolderPhotos WHERE ApplicationId = @Id;
+                        SET @Found = 1;
+                    END',
+                    N'@Id INT, @Include BIT, @Found BIT OUTPUT',
+                    @Id = @ApplicationId, @Include = @IncludeContent, @Found = @Found OUTPUT;
+            IF @Found = 1 RETURN;
+
+            SELECT COALESCE(NULLIF(business.BusinessPhotoContentType, ''), 'image/jpeg') AS ContentType,
+                CASE WHEN @IncludeContent = 1 THEN business.BusinessPhotoContent ELSE NULL END AS FileContent
+            FROM dbo.Applications AS application
+            INNER JOIN dbo.CustomerBusinesses AS business ON business.BusinessId = application.BusinessId
+            WHERE application.ApplicationId = @ApplicationId
+                AND application.Archive_Date IS NULL
+                AND DATALENGTH(business.BusinessPhotoContent) > 0;
             """);
         command.Parameters.AddWithValue("@ApplicationId", applicationId);
+        command.Parameters.Add("@IncludeContent", SqlDbType.Bit).Value = includeContent;
         await command.Connection!.OpenAsync();
-        return Convert.ToBoolean(await command.ExecuteScalarAsync());
+        await using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync()) return null;
+        return (reader.GetString(0), includeContent ? reader.GetFieldValue<byte[]>(1) : null);
     }
 
     private async Task<InternalApplicationDetailResponse?> FindPermit(string token)

@@ -24,5 +24,5 @@ public interface IAuthService
 
     Task<PasswordResetByAdminResponse> SetUserPasswordByAdminAsync(int userId, SetUserPasswordByAdminRequest request);
 
-    Task<ManagedUserResponse> RegisterCustomerAsync(RegisterCustomerRequest request);
+    Task<ManagedUserResponse> RegisterCustomerAsync(RegisterCustomerRequest request, bool sendWelcomeEmail = true);
 }

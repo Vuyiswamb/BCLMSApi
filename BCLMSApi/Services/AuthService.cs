@@ -222,7 +222,7 @@ public class AuthService(IAuthRepository authRepository, IConfiguration configur
         };
     }
 
-    public async Task<ManagedUserResponse> RegisterCustomerAsync(RegisterCustomerRequest request)
+    public async Task<ManagedUserResponse> RegisterCustomerAsync(RegisterCustomerRequest request, bool sendWelcomeEmail = true)
     {
         if (string.IsNullOrWhiteSpace(request.FullName)
             || string.IsNullOrWhiteSpace(request.Email)
@@ -253,6 +253,7 @@ public class AuthService(IAuthRepository authRepository, IConfiguration configur
             true,
             []);
 
+        if (sendWelcomeEmail)
         try
         {
             await emailService.SendEmailOffice365Async(
