@@ -17,7 +17,7 @@ public class SystemSettingsService(Datalayer datalayer, IConfiguration configura
     {
         var host = await GetSettingAsync(EmailHostKey) ?? configuration["Email:Office365:Host"] ?? "smtp.office365.com";
         var port = await GetSettingAsync(EmailPortKey) ?? configuration["Email:Office365:Port"] ?? "587";
-        var fromAddress = await GetSettingAsync(EmailFromAddressKey) ?? configuration["Email:Office365:FromAddress"] ?? "Ithuba@TSHWANE.GOV.ZA";
+        var fromAddress = await GetSettingAsync(EmailFromAddressKey) ?? configuration["Email:Office365:FromAddress"] ?? "BCR@TSHWANE.GOV.ZA";
         var username = await GetSettingAsync(EmailUsernameKey) ?? configuration["Email:Office365:Username"] ?? fromAddress;
         var password = await GetEmailPasswordAsync();
         return new EmailSettingsResponse

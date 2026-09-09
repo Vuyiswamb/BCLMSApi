@@ -368,7 +368,22 @@ public static class GenericMethods
             using (SmtpClient smtpClient = new SmtpClient("smtp.office365.com", 587))
             using (MailMessage mailMessage = new MailMessage())
             {
-                mailMessage.From = new MailAddress("Ithuba@TSHWANE.GOV.ZA");
+                //mailMessage.From = new MailAddress("BCR@TSHWANE.GOV.ZA");
+                //mailMessage.To.Add(new MailAddress(to));
+                //mailMessage.Subject = subject;
+                //mailMessage.Body = body;
+                //mailMessage.IsBodyHtml = true;
+
+                //smtpClient.EnableSsl = true;
+                //smtpClient.UseDefaultCredentials = false;
+                //smtpClient.Credentials = new NetworkCredential("BCR@TSHWANE.GOV.ZA", "Qf9!tZ3p@Lw8");
+                //smtpClient.Timeout = 60000;
+
+                //await smtpClient.SendMailAsync(mailMessage);
+                //Console.WriteLine($"Email sent successfully to: {to}");
+
+
+                mailMessage.From = new MailAddress("BCR@TSHWANE.GOV.ZA");
                 mailMessage.To.Add(new MailAddress(to));
                 mailMessage.Subject = subject;
                 mailMessage.Body = body;
@@ -376,30 +391,12 @@ public static class GenericMethods
 
                 smtpClient.EnableSsl = true;
                 smtpClient.UseDefaultCredentials = false;
-                smtpClient.Credentials = new NetworkCredential("Ithuba@TSHWANE.GOV.ZA", "Qf9!tZ3p@Lw8");
+                smtpClient.Credentials = new NetworkCredential("BCR@TSHWANE.GOV.ZA", "T$hwane12345");
                 smtpClient.Timeout = 60000;
 
                 await smtpClient.SendMailAsync(mailMessage);
                 Console.WriteLine($"Email sent successfully to: {to}");
-
-
-                //using (SmtpClient smtpClient = new SmtpClient("smtp.office365.com", 587))
-                //using (MailMessage mailMessage = new MailMessage())
-                //{
-                //    mailMessage.From = new MailAddress("BCR@TSHWANE.GOV.ZA");
-                //    mailMessage.To.Add(new MailAddress(to));
-                //    mailMessage.Subject = subject;
-                //    mailMessage.Body = body;
-                //    mailMessage.IsBodyHtml = true;
-
-                //    smtpClient.EnableSsl = true;
-                //    smtpClient.UseDefaultCredentials = false;
-                //    smtpClient.Credentials = new NetworkCredential("BCR@TSHWANE.GOV.ZA", "T$hwane12345");
-                //    smtpClient.Timeout = 60000;
-
-                //    await smtpClient.SendMailAsync(mailMessage);
-                //    Console.WriteLine($"Email sent successfully to: {to}");
-                }
+            }
             }
         catch (SmtpException ex)
         {
@@ -414,7 +411,7 @@ public static class GenericMethods
             using (SmtpClient smtpClient = new SmtpClient("smtp.office365.com", 587))
             using (MailMessage mailMessage = new MailMessage())
             {
-                mailMessage.From = new MailAddress("Ithuba@TSHWANE.GOV.ZA");
+                mailMessage.From = new MailAddress("BCR@TSHWANE.GOV.ZA");
                 mailMessage.To.Add(new MailAddress(to));
                 mailMessage.Subject = subject;
                 mailMessage.Body = body;
@@ -422,7 +419,7 @@ public static class GenericMethods
 
                 smtpClient.EnableSsl = true;
                 smtpClient.UseDefaultCredentials = false;
-                smtpClient.Credentials = new NetworkCredential("Ithuba@TSHWANE.GOV.ZA", "#ICT*support#");
+                smtpClient.Credentials = new NetworkCredential("BCR@TSHWANE.GOV.ZA", "T$hwane12345");
                 smtpClient.Timeout = 60000;
 
                 await smtpClient.SendMailAsync(mailMessage);
@@ -444,7 +441,7 @@ public static class GenericMethods
 <head>
     <meta charset='UTF-8'>
     <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-    <title>Password Recovery – Ithuba Youth Economic Development Programme</title>
+    <title>Password Recovery – Business Compliance & Regulations</title>
     <style>
         body {{ font-family: Arial, Helvetica, sans-serif; background:#f6f6f6; margin:0; padding:20px 0; }}
         .container {{ max-width:650px; margin:0 auto; background:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.08); }}
@@ -462,7 +459,7 @@ public static class GenericMethods
 
         <!-- Header -->
         <div class='header'>
-            <h1>Ithuba Youth Economic Development Programme</h1>
+            <h1>Business Compliance & Regulations</h1>
             <p>Planting a seed, empowering our youth and building a great city</p>
         </div>
 
@@ -480,14 +477,14 @@ public static class GenericMethods
             </ul>
 
             <p style='text-align:center; margin:35px 0;'>
-                <a href='https://iyedp.tshwane.gov.za/app-login' class='btn'>Log In to Your Portal Now</a>
+                <a href='https://bclms.tshwane.gov.za' class='btn'>Log In to Your Portal Now</a>
             </p>
 
             <p>Please use these credentials to log in to your account. For security reasons, we recommend changing your password after logging in.</p>
 
             <p>If you did not request this recovery, please contact our support team immediately:</p>
             <p style='background:#fff8e1; padding:15px; border-radius:6px; text-align:center; font-size:15px;'>
-                Email: <a href='mailto:Ithuba@TSHWANE.GOV.ZA'>ithuba@tshwane.gov.za</a><br>
+                Email: <a href='mailto:BCR@TSHWANE.GOV.ZA'>BCR@tshwane.gov.za</a><br>
                 Tel: <strong>012 358 1634 / 5700 / 5587</strong>
             </p>
         </div>
@@ -497,9 +494,9 @@ public static class GenericMethods
             <p><strong>City of Tshwane • Economic Development Division</strong><br>
             6th Floor, Middestad Building, 252 Thabo Sehume Street, Pretoria, 0002<br>
             PO Box 6338, Pretoria, 0001</p>
-            <p>Tel: 012 358 1634 / 5700 / 5587 | Email: <a href='mailto:Ithuba@TSHWANE.GOV.ZA'>ithuba@tshwane.gov.za</a></p>
+            <p>Tel: 012 358 1634 / 5700 / 5587 | Email: <a href='mailto:BCR@TSHWANE.GOV.ZA'>BCR@tshwane.gov.za</a></p>
             <p>© {DateTime.Now.Year} City of Tshwane. All rights reserved.</p>
-            <p style='color:#999; font-size:11px;'>This is an automated message from the Ithuba Youth Portal. Please do not reply.</p>
+            <p style='color:#999; font-size:11px;'>This is an automated message from the Business Compliance for Licence & Permit portal. Please do not reply.</p>
         </div>
     </div>
 </body>
@@ -509,7 +506,7 @@ public static class GenericMethods
 
 
 
-    public static string BuildHtmlIthubaWelcome(string Fullname)
+    public static string BuildHtmlBusinessComplianceWelcome(string Fullname)
     {
         return $@"
 <!DOCTYPE html>
@@ -517,7 +514,7 @@ public static class GenericMethods
 <head>
     <meta charset='UTF-8'>
     <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-    <title>Welcome to Ithuba Youth Economic Development Programme</title>
+    <title>Welcome to Business Compliance for Licence & Permit</title>
     <style>
         body {{ font-family: Arial, Helvetica, sans-serif; background:#f6f6f6; margin:0; padding:20px 0; }}
         .container {{ max-width:650px; margin:0 auto; background:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.08); }}
@@ -538,7 +535,7 @@ public static class GenericMethods
 
         <!-- Header -->
         <div class='header'>
-            <h1>Ithuba Youth Economic Development Programme</h1>
+            <h1>Business Compliance for Licence & Permit</h1>
             <p>Planting a seed, empowering our youth and building a great city</p>
         </div>
 
@@ -547,10 +544,10 @@ public static class GenericMethods
             <h2 style='color:#49A942; text-align:center;'>Sawubona <span class='highlight'>{Fullname}</span>!</h2>
 
             <p style='font-size:18px; text-align:center; margin:25px 0;'>
-                <strong>Welcome to the Ithuba family!</strong>
+                <strong>Welcome to Business Compliance for Licence & Permit.</strong>
             </p>
 
-            <p>You have just taken a powerful first step. By registering for the <strong>Ithuba Youth Economic Development Programme</strong>, you are now part of a movement that is creating real opportunities for young people across the City of Tshwane.</p>
+            <p>You have just taken a powerful first step. By registering for the <strong>Business Compliance for Licence & Permit</strong>, you are now part of a movement that is creating real opportunities for young people across the City of Tshwane.</p>
 
             <div class='quote'>
                 ""Be the change you wish to see in the world.""<br>
@@ -570,13 +567,13 @@ public static class GenericMethods
             <div class='important-note'>
                 <span class='nb-badge'>NB</span>
                 <p><strong>Important note:</strong><br>
-                The Ithuba Team will be in touch with you for further screening, selection, and scheduling. Please keep checking your emails, SMS, and WhatsApp messages for further communication.</p>
+                Business Compliance for Licence & Permit will be in touch with you for further screening, selection, and scheduling. Please keep checking your emails, SMS, and WhatsApp messages for further communication.</p>
             </div>
 
             <p>We are so excited to walk this road with you. Your dreams matter. Your future starts <strong>today</strong>.</p>
 
             <p style='text-align:center; color:#49A942; font-size:18px; margin-top:40px;'>
-                <strong>Team Ithuba – City of Tshwane</strong>
+                <strong>Business Compliance for Licence & Permit – City of Tshwane</strong>
             </p>
         </div>
 
@@ -585,9 +582,9 @@ public static class GenericMethods
             <p><strong>City of Tshwane • Economic Development Division</strong><br>
             6th Floor, Middestad Building, 252 Thabo Sehume Street, Pretoria, 0002<br>
             PO Box 6338, Pretoria, 0001</p>
-            <p>Tel: 012 358 1634 / 5700 / 5587 | Email: <a href='mailto:Ithuba@TSHWANE.GOV.ZA'>ithuba@tshwane.gov.za</a></p>
+            <p>Tel: 012 358 1634 / 5700 / 5587 | Email: <a href='mailto:BCR@TSHWANE.GOV.ZA'>BCR@TSHWANE.GOV.ZA</a></p>
             <p>© {DateTime.Now.Year} City of Tshwane. All rights reserved.</p>
-            <p style='color:#999; font-size:11px;'>This is an automated welcome message from the Ithuba Youth Programme.</p>
+            <p style='color:#999; font-size:11px;'>This is an automated welcome message from the Business Compliance for Licence & Permit.</p>
         </div>
     </div>
 </body>
@@ -606,7 +603,7 @@ public static class GenericMethods
 <head>
     <meta charset='UTF-8'>
     <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-    <title>Thank You for Powering Ithuba – City of Tshwane</title>
+    <title>Thank You - Business Compliance for Licence & Permit – City of Tshwane</title>
     <style>
         body {{ font-family: Arial, Helvetica, sans-serif; background:#f6f6f6; margin:0; padding:20px 0; }}
         .container {{ max-width:680px; margin:0 auto; background:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.08); }}
@@ -628,7 +625,7 @@ public static class GenericMethods
 
         <!-- Header -->
         <div class='header'>
-            <h1>Ithuba Youth Economic Development Programme</h1>
+            <h1>Business Compliance for Licence & Permit</h1>
             <p>Planting a seed, empowering our youth and building a great city</p>
         </div>
 
@@ -639,7 +636,7 @@ public static class GenericMethods
             </h2>
 
             <p style='text-align:center; font-size:19px;'>
-                Your pledge is making the Ithuba initiative a powerful success.
+                Your pledge is making the business compliance initiative a powerful success.
             </p>
  
 
@@ -654,7 +651,7 @@ public static class GenericMethods
             </p>
 
             <p style='text-align:center; margin:40px 0;'>
-                <a href='https://BCLMS.tshwane.gov.za/app-login' class='btn'>Visit Our Partners Page</a>
+                <a href='https://bclms.tshwane.gov.za' class='btn'>Visit Our Partners Page</a>
             </p>
 
             <p>We will be in touch soon with your official Partner Certificate, branding pack, and next steps to activate your pledge.</p>
@@ -665,7 +662,7 @@ public static class GenericMethods
 
             <p style='text-align:center; margin-top:30px;'>
                 Warm regards,<br>
-                <strong>The Ithuba Team</strong><br>
+                <strong>Business Compliance for Licence & Permit</strong><br>
                 City of Tshwane Economic Development Division
             </p>
         </div>
@@ -675,7 +672,7 @@ public static class GenericMethods
             <p><strong>City of Tshwane • Economic Development Division</strong><br>
             6th Floor, Middestad Building, 252 Thabo Sehume Street, Pretoria, 0002<br>
             PO Box 6338, Pretoria, 0001</p>
-            <p>Tel: 012 358 1634 / 5700 / 5587 | Email: <a href='mailto:Ithuba@TSHWANE.GOV.ZA'>Ithuba@TSHWANE.GOV.ZA</a></p>
+            <p>Tel: 012 358 1634 / 5700 / 5587 | Email: <a href='mailto:BCR@TSHWANE.GOV.ZA'>BCR@TSHWANE.GOV.ZA</a></p>
             <p>© {DateTime.Now.Year} City of Tshwane. All rights reserved.</p>
         </div>
     </div>

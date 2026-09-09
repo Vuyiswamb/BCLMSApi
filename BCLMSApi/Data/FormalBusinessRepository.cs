@@ -529,15 +529,18 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
                 throw new DuplicateApplicationException(error.Message);
             }
 
+            ApplicationSubmitResponse response;
             await using (reader)
             {
                 if (!await reader.ReadAsync())
                 {
                     throw new InvalidOperationException("The application could not be saved.");
                 }
-
-                return MapApplicationResponse(reader);
+                response = MapApplicationResponse(reader);
             }
+            await SavePrePackedPerishableGoodsAsync(response.ApplicationId, request.PrePackedPerishableGoods);
+            response.PrePackedPerishableGoods = request.PrePackedPerishableGoods;
+            return response;
         }
         catch (DuplicateApplicationException)
         {
@@ -547,6 +550,15 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
         {
             throw CreateDatabaseException("submit application", ex);
         }
+    }
+
+    private async Task SavePrePackedPerishableGoodsAsync(int applicationId, string? selections)
+    {
+        await using var command = datalayer.CreateTextCommand("UPDATE dbo.Applications SET PrePackedPerishableGoods = @Selections WHERE ApplicationId = @ApplicationId;");
+        command.Parameters.AddWithValue("@ApplicationId", applicationId);
+        command.Parameters.AddWithValue("@Selections", string.IsNullOrWhiteSpace(selections) ? DBNull.Value : selections.Trim());
+        await command.Connection!.OpenAsync();
+        await command.ExecuteNonQueryAsync();
     }
 
     public async Task<ApplicationSubmitResponse?> ResubmitRejectedApplicationAsync(int applicationId, ApplicationSubmitRequest request, string licenceType, int userId)

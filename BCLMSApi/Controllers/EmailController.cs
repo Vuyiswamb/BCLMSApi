@@ -1,4 +1,4 @@
-﻿namespace TshwaneYouthAPi.Controllers
+namespace TshwaneYouthAPi.Controllers
 { 
     using global::BCLMSApi.Services;
     using Microsoft.AspNetCore.Mvc;
@@ -33,7 +33,7 @@
 
                     // Test configuration
                     string testRecipient = "VuyiswaMa@tshwane.gov.za";
-                    string testSubject = "Office 365 - Ithuba Email Test";
+                    string testSubject = "Office 365 - Business Compliance for Licence & Permit Email Test";
                     string testBody = "This is a test email to verify Office 365 email functionality.";
 
                     // Get client IP for diagnostics
@@ -93,7 +93,7 @@ Diagnostic Information:
                         {
                             Timestamp = DateTime.UtcNow,
                             MachineName = Environment.MachineName,
-                            Application = "Ithuba API",
+                            Application = "Business Compliance for Licence & Permit API",
                             ClientIP = clientIP,
                             RequestPath = HttpContext.Request.Path,
                             UserAgent = HttpContext.Request.Headers["User-Agent"].ToString()
@@ -182,7 +182,7 @@ Diagnostic Information:
                         {
                             Timestamp = DateTime.UtcNow,
                             MachineName = Environment.MachineName,
-                            Application = "Ithuba API",
+                            Application = "Business Compliance for Licence & Permit API",
                             ClientIP = clientIP,
                             RequestPath = HttpContext.Request.Path,
                             UserAgent = HttpContext.Request.Headers["User-Agent"].ToString()

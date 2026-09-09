@@ -22,6 +22,8 @@ public class ApplicationSubmitResponse
 
     public string? TradeStandBusinessType { get; set; }
 
+    public string? PrePackedPerishableGoods { get; set; }
+
     public string CurrentStage { get; set; } = string.Empty;
 
     public string Status { get; set; } = string.Empty;
