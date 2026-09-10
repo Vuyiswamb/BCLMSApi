@@ -93,6 +93,18 @@ public class InternalApplicationWorkflowStepResponse
 
 public class WorkflowStepActionRequest
 {
+    [System.Text.Json.Serialization.JsonIgnore]
+    public int ExpectedStepSequence { get; set; }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string ExpectedStepName { get; set; } = string.Empty;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string ExpectedIdentityNumber { get; set; } = string.Empty;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string ExpectedApplicantName { get; set; } = string.Empty;
+
     public string Decision { get; set; } = string.Empty;
 
     public string? Comment { get; set; }

@@ -616,13 +616,41 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
             command.Parameters.AddWithValue("@SignatureFileSha256Hash", signatureBytes is null ? DBNull.Value : Convert.ToHexString(SHA256.HashData(signatureBytes)));
 
             await command.Connection!.OpenAsync();
-            await using var reader = await command.ExecuteReaderAsync();
-            if (!await reader.ReadAsync())
+            await using var transaction = (SqlTransaction)await command.Connection.BeginTransactionAsync();
+            command.Transaction = transaction;
+            // Serialize workflow writes and reject stale identity/step snapshots after the external lookup.
+            await using var guard = command.Connection.CreateCommand();
+            guard.Transaction = transaction;
+            guard.CommandText = """
+                SELECT ApplicantName, IdOrPassportNumber
+                FROM dbo.Applications WITH (UPDLOCK, HOLDLOCK)
+                WHERE ApplicationId = @ApplicationId AND Archive_Date IS NULL
+                  AND Status NOT IN ('Rejected', 'Cancelled', 'Completed', 'Archived');
+                SELECT TOP (1) SequenceNumber, StepName
+                FROM dbo.ApplicationWorkflowSteps WITH (UPDLOCK, HOLDLOCK)
+                WHERE ApplicationId = @ApplicationId
+                  AND Status NOT IN ('Approved', 'Completed', 'Complete')
+                ORDER BY SequenceNumber;
+                """;
+            guard.Parameters.AddWithValue("@ApplicationId", applicationId);
+            await using (var snapshot = await guard.ExecuteReaderAsync())
             {
-                return null;
+                if (!await snapshot.ReadAsync()
+                    || snapshot.GetString(0) != request.ExpectedApplicantName
+                    || snapshot.GetString(1) != request.ExpectedIdentityNumber
+                    || !await snapshot.NextResultAsync() || !await snapshot.ReadAsync()
+                    || snapshot.GetInt32(0) != request.ExpectedStepSequence
+                    || snapshot.GetString(1) != request.ExpectedStepName)
+                    throw new ArgumentException("The application changed while processing. Reload it and try again.");
             }
 
-            var updatedApplicationId = reader.GetInt32(reader.GetOrdinal("ApplicationId"));
+            int updatedApplicationId;
+            await using (var reader = await command.ExecuteReaderAsync())
+            {
+                if (!await reader.ReadAsync()) return null;
+                updatedApplicationId = reader.GetInt32(reader.GetOrdinal("ApplicationId"));
+            }
+            await transaction.CommitAsync();
             return await GetInternalApplicationDetailAsync(updatedApplicationId);
         }
         catch (SqlException ex)

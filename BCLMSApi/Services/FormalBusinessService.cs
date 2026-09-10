@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Razor.TagHelpers;
 
 namespace BCLMSApi.Services;
 
-public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepository, Datalayer datalayer, IEmailService emailService) : IFormalBusinessService
+public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepository, Datalayer datalayer, IEmailService emailService, IHanisVerificationService hanisVerification) : IFormalBusinessService
 {
     private const long MaxPdfBytes = 10 * 1024 * 1024;
     private static readonly byte[] PdfHeader = "%PDF"u8.ToArray();
@@ -437,6 +437,36 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
             {
                 throw new ArgumentException("The signature image may not exceed 10 MB.");
             }
+        }
+
+        // Read persisted sequence numbers, without the display-only workshop/fallback steps.
+        var currentApplication = await formalBusinessRepository.GetInternalApplicationDetailAsync(
+            applicationId, null, HasAllRegionAccess(user), user.Regions)
+            ?? throw new UnauthorizedAccessException("This application is not available to you.");
+        var currentStep = currentApplication.WorkflowSteps.OrderBy(step => step.SequenceNumber)
+            .FirstOrDefault(step => !IsCompletedWorkflowStatus(step.Status))
+            ?? throw new ArgumentException("There is no active workflow step to process.");
+        if (!user.IsSuperUser && !user.Groups.Contains(currentStep.GroupName, StringComparer.OrdinalIgnoreCase))
+            throw new UnauthorizedAccessException("You are not assigned to process this workflow step.");
+        if (!new[] { "Pending", "In progress", "Submitted", "Under Review" }.Contains(currentStep.Status, StringComparer.OrdinalIgnoreCase)
+            || new[] { "Rejected", "Cancelled", "Completed", "Archived" }.Contains(currentApplication.Status, StringComparer.OrdinalIgnoreCase))
+            throw new ArgumentException("This application has no active workflow action.");
+
+        // Only server-loaded values may bind the eventual write to this verification.
+        request.ExpectedStepSequence = currentStep.SequenceNumber;
+        request.ExpectedStepName = currentStep.StepName;
+        request.ExpectedIdentityNumber = currentApplication.IdOrPassportNumber;
+        request.ExpectedApplicantName = currentApplication.ApplicantName;
+        if (currentStep.StepName.Trim().Equals("Home Affairs Verification", StringComparison.OrdinalIgnoreCase)
+            && !decision.Equals("Reject", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!decision.Equals("Approve", StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("The Home Affairs step must be verified and approved.");
+            var transactionId = await hanisVerification.VerifyAsync(currentApplication.IdOrPassportNumber,
+                currentApplication.ApplicantName, user.Username);
+            var audit = $"Home Affairs identity and full name verified at {DateTime.UtcNow:O}. Transaction: {transactionId}.";
+            var comment = request.Comment?.Trim() ?? string.Empty;
+            request.Comment = audit + (comment.Length == 0 ? "" : " " + comment[..Math.Min(comment.Length, 499 - audit.Length)]);
         }
 
         var updatedApplication = await formalBusinessRepository.ProcessWorkflowStepAsync(applicationId, request, user);

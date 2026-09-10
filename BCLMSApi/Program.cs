@@ -24,6 +24,12 @@ builder.Services.AddScoped<IFormalBusinessRepository, FormalBusinessRepository>(
 builder.Services.AddScoped<IComplaintRepository, ComplaintRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IFormalBusinessService, FormalBusinessService>();
+builder.Services.AddScoped<HomeAffairsLookupStore>();
+builder.Services.AddHttpClient<IHanisVerificationService, HanisVerificationService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.MaxResponseContentBufferSize = 10 * 1024 * 1024;
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddScoped<IComplaintService, ComplaintService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<ISmsService, SmsService>();
