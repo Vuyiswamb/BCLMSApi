@@ -569,6 +569,7 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
             command.Parameters.AddWithValue("@AreaCategory", (object?)request.AreaCategory ?? DBNull.Value);
             command.Parameters.AddWithValue("@ApplicationId", applicationId);
             command.Parameters.AddWithValue("@UserId", userId);
+            command.Parameters.AddWithValue("@ApplicantName", request.ApplicantName.Trim());
             command.Parameters.AddWithValue("@EmailAddress", request.Email.Trim());
             command.Parameters.AddWithValue("@MobileNumber", request.Phone.Trim());
             command.Parameters.AddWithValue("@PhysicalAddress", request.Address.Trim());

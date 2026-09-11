@@ -11,7 +11,7 @@ public interface IHanisVerificationService
     Task<HanisVerificationService.HanisResult> LookupAsync(string idNumber, string applicantName, string username);
 }
 
-public sealed class HanisVerificationService(HttpClient client, IConfiguration configuration,
+public sealed class HanisVerificationService(HttpClient client, ISystemSettingsService settings,
     ILogger<HanisVerificationService> logger) : IHanisVerificationService
 {
     public async Task<string> VerifyAsync(string idNumber, string applicantName, string username)
@@ -23,9 +23,11 @@ public sealed class HanisVerificationService(HttpClient client, IConfiguration c
         if (!Regex.IsMatch(idNumber, "^[0-9]{13}$", RegexOptions.CultureInvariant))
             throw new ArgumentException("Home Affairs requires a 13-digit South African ID. Passport applicants remain pending for manual verification.");
 
-        var key = configuration["Hanis:ApiKey"];
-        if (string.IsNullOrWhiteSpace(key) || !Uri.TryCreate(configuration["Hanis:BaseUrl"], UriKind.Absolute, out var baseUri)
-            || (baseUri.Scheme != "https" && !(baseUri.Scheme == "http" && configuration.GetValue<bool>("Hanis:AllowInsecureQa")))
+        var hanisSettings = await settings.GetHanisSettingsAsync();
+        var key = await settings.GetHanisApiKeyAsync();
+        if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(hanisSettings.Username)
+            || !Uri.TryCreate(hanisSettings.BaseUrl, UriKind.Absolute, out var baseUri)
+            || (baseUri.Scheme != "https" && !(baseUri.Scheme == "http" && hanisSettings.AllowInsecureQa))
             || !string.IsNullOrEmpty(baseUri.UserInfo) || !string.IsNullOrEmpty(baseUri.Query) || !string.IsNullOrEmpty(baseUri.Fragment))
             throw new ArgumentException("Home Affairs verification is not configured. Contact the system administrator; this step remains pending.");
 
@@ -36,8 +38,8 @@ public sealed class HanisVerificationService(HttpClient client, IConfiguration c
             {
                 using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, "/api/lookup"));
                 request.Headers.Add("X-Api-Key", key);
-                request.Content = JsonContent.Create(new { idNumber, appUserName = username,
-                    appDepartment = configuration["Hanis:Department"] ?? "Economic Development" });
+                request.Content = JsonContent.Create(new { idNumber, appUserName = hanisSettings.Username,
+                    appDepartment = hanisSettings.Department });
                 using var response = await client.SendAsync(request, deadline.Token);
                 if (response.StatusCode == HttpStatusCode.ServiceUnavailable && attempt < 2)
                 {

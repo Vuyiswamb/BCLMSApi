@@ -12,6 +12,11 @@ public class SystemSettingsService(Datalayer datalayer, IConfiguration configura
     private const string EmailFromAddressKey = "Email.Office365.FromAddress";
     private const string EmailUsernameKey = "Email.Office365.Username";
     private const string EmailPasswordKey = "Email.Office365.Password";
+    private const string HanisBaseUrlKey = "Hanis.BaseUrl";
+    private const string HanisUsernameKey = "Hanis.Username";
+    private const string HanisDepartmentKey = "Hanis.Department";
+    private const string HanisAllowInsecureQaKey = "Hanis.AllowInsecureQa";
+    private const string HanisApiKeyKey = "Hanis.ApiKey";
 
     public async Task<EmailSettingsResponse> GetEmailSettingsAsync()
     {
@@ -56,6 +61,43 @@ public class SystemSettingsService(Datalayer datalayer, IConfiguration configura
         }
 
         return Unprotect(protectedValue);
+    }
+
+    public async Task<HanisSettingsResponse> GetHanisSettingsAsync()
+    {
+        var apiKey = await GetHanisApiKeyAsync();
+        return new HanisSettingsResponse
+        {
+            BaseUrl = await GetSettingAsync(HanisBaseUrlKey) ?? configuration["Hanis:BaseUrl"] ?? string.Empty,
+            Username = await GetSettingAsync(HanisUsernameKey) ?? configuration["Hanis:Username"] ?? string.Empty,
+            Department = await GetSettingAsync(HanisDepartmentKey) ?? configuration["Hanis:Department"] ?? "Economic Development",
+            AllowInsecureQa = bool.TryParse(await GetSettingAsync(HanisAllowInsecureQaKey) ?? configuration["Hanis:AllowInsecureQa"], out var allowInsecureQa) && allowInsecureQa,
+            HasApiKey = !string.IsNullOrWhiteSpace(apiKey),
+            ApiKeyMask = string.IsNullOrWhiteSpace(apiKey) ? "Not configured" : "********",
+            ApiKey = apiKey ?? string.Empty
+        };
+    }
+
+    public async Task<HanisSettingsResponse> UpdateHanisSettingsAsync(HanisSettingsUpdateRequest request)
+    {
+        if (!Uri.TryCreate(request.BaseUrl?.Trim(), UriKind.Absolute, out var uri)
+            || !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
+            throw new ArgumentException("Enter a valid Home Affairs base URL without credentials, query parameters, or fragments.");
+        if (string.IsNullOrWhiteSpace(request.Username))
+            throw new ArgumentException("Enter the Home Affairs API username.");
+
+        await SaveSettingAsync(HanisBaseUrlKey, uri.GetLeftPart(UriPartial.Path).TrimEnd('/'), false);
+        await SaveSettingAsync(HanisUsernameKey, request.Username.Trim(), false);
+        await SaveSettingAsync(HanisDepartmentKey, request.Department.Trim(), false);
+        await SaveSettingAsync(HanisAllowInsecureQaKey, request.AllowInsecureQa.ToString(), false);
+        if (!string.IsNullOrWhiteSpace(request.ApiKey)) await SaveSettingAsync(HanisApiKeyKey, Protect(request.ApiKey.Trim()), true);
+        return await GetHanisSettingsAsync();
+    }
+
+    public async Task<string?> GetHanisApiKeyAsync()
+    {
+        var protectedValue = await GetSettingAsync(HanisApiKeyKey);
+        return string.IsNullOrWhiteSpace(protectedValue) ? configuration["Hanis:ApiKey"] : Unprotect(protectedValue);
     }
 
     private async Task<string?> GetSettingAsync(string settingKey)

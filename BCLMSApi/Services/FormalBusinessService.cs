@@ -150,14 +150,32 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
         return application;
     }
 
-    public Task<ApplicationDocumentFileResponse?> GetApplicationDocumentFileAsync(int applicationId, int applicationDocumentId, UserTokenPayload user)
+    public async Task<ApplicationDocumentFileResponse?> GetApplicationDocumentFileAsync(int applicationId, int applicationDocumentId, UserTokenPayload user)
     {
         if (applicationId <= 0 || applicationDocumentId <= 0)
         {
             throw new ArgumentException("Select a valid document.");
         }
 
-        return formalBusinessRepository.GetApplicationDocumentFileAsync(applicationId, applicationDocumentId, user.IsCustomer ? user.UserId : null);
+        if (user.IsCustomer)
+        {
+            var application = await formalBusinessRepository.GetInternalApplicationDetailAsync(applicationId, user.UserId);
+            var attachment = application?.Attachments.FirstOrDefault(item => item.ApplicationDocumentId == applicationDocumentId);
+            if (attachment is null || !IsCustomerAttachment(attachment))
+            {
+                return null;
+            }
+        }
+
+        return await formalBusinessRepository.GetApplicationDocumentFileAsync(applicationId, applicationDocumentId, user.IsCustomer ? user.UserId : null);
+    }
+
+    private static bool IsCustomerAttachment(InternalApplicationAttachmentResponse attachment)
+    {
+        return attachment.AttachmentTypeId.HasValue
+            && !attachment.DocumentName.Contains("approval signature", StringComparison.OrdinalIgnoreCase)
+            && !attachment.DocumentName.Contains("director signature", StringComparison.OrdinalIgnoreCase)
+            && !attachment.DocumentName.Contains("functional head signature", StringComparison.OrdinalIgnoreCase);
     }
 
     public Task<bool> ArchiveApplicationAsync(int applicationId, UserTokenPayload user)

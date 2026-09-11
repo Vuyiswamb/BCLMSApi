@@ -29,4 +29,18 @@ public class SettingsController(ISystemSettingsService settingsService, IUserTok
 
         return Ok(await settingsService.UpdateEmailSettingsAsync(request));
     }
+
+    [HttpGet("hanis")]
+    public async Task<ActionResult<HanisSettingsResponse>> GetHanisSettings()
+    {
+        if (!userTokenService.IsSuperUserToken(Request.Headers.Authorization)) return StatusCode(StatusCodes.Status403Forbidden, new { message = "Super User access is required to view settings." });
+        return Ok(await settingsService.GetHanisSettingsAsync());
+    }
+
+    [HttpPut("hanis")]
+    public async Task<ActionResult<HanisSettingsResponse>> UpdateHanisSettings(HanisSettingsUpdateRequest request)
+    {
+        if (!userTokenService.IsSuperUserToken(Request.Headers.Authorization)) return StatusCode(StatusCodes.Status403Forbidden, new { message = "Super User access is required to update settings." });
+        return Ok(await settingsService.UpdateHanisSettingsAsync(request));
+    }
 }
