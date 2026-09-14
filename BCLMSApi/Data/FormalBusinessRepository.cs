@@ -967,6 +967,7 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
 
     private static void AddCustomerBusinessParameters(SqlCommand command, int userId, CustomerBusinessSaveRequest request)
     {
+        command.Parameters.AddWithValue("@TelephoneNumber", request.TelephoneNumber);
         var documentBytes = ParseBase64File(request.CipcDocumentBase64);
         command.Parameters.AddWithValue("@UserId", userId);
         command.Parameters.AddWithValue("@BusinessName", request.BusinessName.Trim());
@@ -1018,6 +1019,7 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
     {
         return new CustomerBusinessResponse
         {
+            TelephoneNumber = reader.IsDBNull(reader.GetOrdinal("TelephoneNumber")) ? null : reader.GetString(reader.GetOrdinal("TelephoneNumber")),
             BusinessId = reader.GetInt32(reader.GetOrdinal("BusinessId")),
             UserId = reader.GetInt32(reader.GetOrdinal("UserId")),
             BusinessName = reader.GetString(reader.GetOrdinal("BusinessName")),

@@ -464,6 +464,7 @@ public class WorkshopController(
             BusinessName = reader.GetString(reader.GetOrdinal("BusinessName")),
             OwnerName = reader.GetString(reader.GetOrdinal("OwnerName")),
             EmailAddress = reader.GetString(reader.GetOrdinal("EmailAddress")),
+            RegionName = reader.IsDBNull(reader.GetOrdinal("RegionName")) ? null : reader.GetString(reader.GetOrdinal("RegionName")),
             MobileNumber = reader.GetString(reader.GetOrdinal("MobileNumber")),
             TownshipName = reader.IsDBNull(reader.GetOrdinal("TownshipName")) ? null : reader.GetString(reader.GetOrdinal("TownshipName"))
         };
@@ -484,20 +485,14 @@ public class WorkshopController(
             businesses.BusinessName,
             COALESCE(NULLIF(users.DisplayName, ''), users.Username) AS OwnerName,
             COALESCE(NULLIF(users.EmailAddress, ''), users.Username) AS EmailAddress,
-            COALESCE(latestApplication.MobileNumber, '') AS MobileNumber,
+            COALESCE(businesses.TelephoneNumber, '') AS MobileNumber,
+            NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), townships.REGION))), '') AS RegionName,
             townships.TOWNSHIP AS TownshipName
         FROM dbo.WorkshopAttendanceRequests requests
         INNER JOIN dbo.CustomerBusinesses businesses ON businesses.BusinessId = requests.BusinessId
         INNER JOIN dbo.Users users ON users.UserId = requests.UserId
         LEFT JOIN dbo.TOWNSHIPS townships ON townships.ID = businesses.TownshipId
-        OUTER APPLY
-        (
-            SELECT TOP (1) applications.MobileNumber
-            FROM dbo.Applications applications
-            WHERE applications.BusinessId = businesses.BusinessId
-              AND applications.Archive_Date IS NULL
-            ORDER BY applications.SubmittedDate DESC, applications.ApplicationId DESC
-        ) latestApplication
+
         """;
 
     private static string BuildEmailBody(string applicantName, string businessName, string preparedBody)

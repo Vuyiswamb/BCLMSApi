@@ -56,6 +56,7 @@ public class WorkshopAttendanceRequestCreateRequest
 
 public class WorkshopAttendanceRequestResponse
 {
+    public string? RegionName { get; set; }
     public int WorkshopAttendanceRequestId { get; set; }
     public int BusinessId { get; set; }
     public int UserId { get; set; }

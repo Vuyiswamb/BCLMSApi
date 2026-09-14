@@ -5,7 +5,7 @@ using BCLMSApi.Models;
 
 namespace BCLMSApi.Services;
 
-public class AuthService(IAuthRepository authRepository, IConfiguration configuration, IEmailService emailService, IUserTokenService userTokenService) : IAuthService
+public class AuthService(IAuthRepository authRepository, IConfiguration configuration, IEmailService emailService, IUserTokenService userTokenService, Datalayer datalayer) : IAuthService
 {
     private const int PasswordHashBytes = 32;
     private const int PasswordSaltBytes = 16;
@@ -224,6 +224,7 @@ public class AuthService(IAuthRepository authRepository, IConfiguration configur
 
     public async Task<ManagedUserResponse> RegisterCustomerAsync(RegisterCustomerRequest request, bool sendWelcomeEmail = true)
     {
+        var phone = SouthAfricanTelephone.Normalize(request.Phone);
         if (string.IsNullOrWhiteSpace(request.FullName)
             || string.IsNullOrWhiteSpace(request.Email)
             || string.IsNullOrWhiteSpace(request.Password))
@@ -252,6 +253,14 @@ public class AuthService(IAuthRepository authRepository, IConfiguration configur
             [customerGroup.GroupId],
             true,
             []);
+
+        await using (var command = datalayer.CreateTextCommand("UPDATE dbo.Users SET TelephoneNumber = @Phone WHERE UserId = @UserId"))
+        {
+            command.Parameters.AddWithValue("@Phone", phone);
+            command.Parameters.AddWithValue("@UserId", user.UserId);
+            await command.Connection!.OpenAsync();
+            await command.ExecuteNonQueryAsync();
+        }
 
         if (sendWelcomeEmail)
         try

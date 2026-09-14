@@ -32,7 +32,11 @@ builder.Services.AddHttpClient<IHanisVerificationService, HanisVerificationServi
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddScoped<IComplaintService, ComplaintService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
-builder.Services.AddScoped<ISmsService, SmsService>();
+builder.Services.AddHttpClient<ISmsService, SmsService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.MaxResponseContentBufferSize = 64 * 1024;
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddScoped<ISystemSettingsService, SystemSettingsService>();
 builder.Services.AddSingleton<IUserTokenService, UserTokenService>();
 builder.Services.AddCors(options =>
@@ -75,3 +79,4 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+

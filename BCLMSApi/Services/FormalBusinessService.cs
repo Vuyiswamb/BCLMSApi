@@ -797,6 +797,7 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
 
     private static void ValidateCustomerBusiness(CustomerBusinessSaveRequest request)
     {
+        request.TelephoneNumber = SouthAfricanTelephone.Normalize(request.TelephoneNumber);
         if (string.IsNullOrWhiteSpace(request.BusinessName)
             || string.IsNullOrWhiteSpace(request.PhysicalAddress)
             || !request.TownshipId.HasValue)

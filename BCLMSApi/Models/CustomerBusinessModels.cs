@@ -4,6 +4,7 @@ public class CustomerBusinessResponse
 {
     public int BusinessId { get; set; }
     public int UserId { get; set; }
+    public string? TelephoneNumber { get; set; }
     public string BusinessName { get; set; } = string.Empty;
     public string? RegistrationNumber { get; set; }
     public int? TownshipId { get; set; }
@@ -25,6 +26,7 @@ public class CustomerBusinessResponse
 
 public class CustomerBusinessSaveRequest
 {
+    public string? TelephoneNumber { get; set; }
     public string BusinessName { get; set; } = string.Empty;
     public string? RegistrationNumber { get; set; }
     public int? TownshipId { get; set; }
