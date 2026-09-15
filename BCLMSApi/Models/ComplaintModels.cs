@@ -2,6 +2,7 @@ namespace BCLMSApi.Models;
 
 public class ComplaintCreateRequest
 {
+    public List<BCLMSApi.Services.ComplaintImageInput> Images { get; set; } = [];
     public string Category { get; set; } = string.Empty;
 
     public string Subject { get; set; } = string.Empty;

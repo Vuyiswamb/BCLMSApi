@@ -149,6 +149,7 @@ public class WorkshopController(
                     BusinessId,
                     UserId,
                     RequestedLicenceType,
+                    WorkshopMode,
                     Status,
                     RequestedDate,
                     Notes,
@@ -160,6 +161,7 @@ public class WorkshopController(
                     @BusinessId,
                     @UserId,
                     @RequestedLicenceType,
+                    @WorkshopMode,
                     'Requested',
                     SYSUTCDATETIME(),
                     @Notes,
@@ -172,6 +174,7 @@ public class WorkshopController(
             command.Parameters.AddWithValue("@BusinessId", request.BusinessId);
             command.Parameters.AddWithValue("@UserId", user.UserId);
             command.Parameters.AddWithValue("@RequestedLicenceType", request.RequestedLicenceType.Trim());
+            command.Parameters.AddWithValue("@WorkshopMode", request.WorkshopMode);
             command.Parameters.AddWithValue("@Notes", string.IsNullOrWhiteSpace(request.Notes) ? DBNull.Value : request.Notes.Trim());
 
             await command.Connection!.OpenAsync();
@@ -375,6 +378,8 @@ public class WorkshopController(
 
     private static void ValidateCreateRequest(WorkshopAttendanceRequestCreateRequest request)
     {
+        if (request.WorkshopMode is not ("Online" or "Physical"))
+            throw new ArgumentException("Choose Online or Physical workshop attendance.");
         if (request.BusinessId <= 0)
         {
             throw new ArgumentException("Select a business before requesting workshop training.");
@@ -455,6 +460,7 @@ public class WorkshopController(
             BusinessId = reader.GetInt32(reader.GetOrdinal("BusinessId")),
             UserId = reader.GetInt32(reader.GetOrdinal("UserId")),
             RequestedLicenceType = reader.GetString(reader.GetOrdinal("RequestedLicenceType")),
+            WorkshopMode = reader.IsDBNull(reader.GetOrdinal("WorkshopMode")) ? null : reader.GetString(reader.GetOrdinal("WorkshopMode")),
             Status = reader.GetString(reader.GetOrdinal("Status")),
             RequestedDate = reader.GetDateTime(reader.GetOrdinal("RequestedDate")),
             ScheduledWorkshopDate = reader.IsDBNull(reader.GetOrdinal("ScheduledWorkshopDate")) ? null : reader.GetDateTime(reader.GetOrdinal("ScheduledWorkshopDate")),
@@ -476,6 +482,7 @@ public class WorkshopController(
             requests.BusinessId,
             requests.UserId,
             requests.RequestedLicenceType,
+            requests.WorkshopMode,
             requests.Status,
             requests.RequestedDate,
             requests.ScheduledWorkshopDate,

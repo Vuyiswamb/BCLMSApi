@@ -4,7 +4,7 @@ using System.Net;
 
 namespace BCLMSApi.Services;
 
-public class ComplaintService(IComplaintRepository complaintRepository, IEmailService emailService) : IComplaintService
+public class ComplaintService(IComplaintRepository complaintRepository, IEmailService emailService, ComplaintConversationService conversation) : IComplaintService
 {
     private static readonly HashSet<string> AllowedStatuses = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -19,7 +19,12 @@ public class ComplaintService(IComplaintRepository complaintRepository, IEmailSe
     public async Task<ComplaintResponse> CreateComplaintAsync(UserTokenPayload user, ComplaintCreateRequest request)
     {
         ValidateComplaint(request);
-        return await complaintRepository.CreateComplaintAsync(user.UserId, request);
+        ComplaintConversationService.ValidateImages(request.Images);
+        using var scope = new System.Transactions.TransactionScope(System.Transactions.TransactionScopeAsyncFlowOption.Enabled);
+        var complaint = await complaintRepository.CreateComplaintAsync(user.UserId, request);
+        await conversation.AddInitialImages(complaint.ComplaintId, request.Images);
+        scope.Complete();
+        return complaint;
     }
 
     public async Task<List<ComplaintResponse>> GetCustomerComplaintsAsync(UserTokenPayload user)

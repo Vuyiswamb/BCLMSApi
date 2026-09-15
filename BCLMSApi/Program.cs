@@ -31,6 +31,7 @@ builder.Services.AddHttpClient<IHanisVerificationService, HanisVerificationServi
     client.MaxResponseContentBufferSize = 10 * 1024 * 1024;
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddScoped<IComplaintService, ComplaintService>();
+builder.Services.AddScoped<ComplaintConversationService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddHttpClient<ISmsService, SmsService>(client =>
 {

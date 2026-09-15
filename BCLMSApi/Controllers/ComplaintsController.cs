@@ -8,7 +8,7 @@ namespace BCLMSApi.Controllers;
 [Route("api/[controller]")]
 public class ComplaintsController(IComplaintService complaintService, IUserTokenService userTokenService) : ControllerBase
 {
-    [HttpPost]
+    [HttpPost, RequestSizeLimit(9000000)]
     public async Task<ActionResult<ComplaintResponse>> CreateComplaint(ComplaintCreateRequest request)
     {
         var user = userTokenService.GetValidTokenPayload(Request.Headers.Authorization);

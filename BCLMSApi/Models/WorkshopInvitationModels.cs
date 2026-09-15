@@ -49,6 +49,7 @@ public class WorkshopBusinessResponse
 
 public class WorkshopAttendanceRequestCreateRequest
 {
+    public string WorkshopMode { get; set; } = "Physical";
     public int BusinessId { get; set; }
     public string RequestedLicenceType { get; set; } = string.Empty;
     public string? Notes { get; set; }
@@ -56,6 +57,7 @@ public class WorkshopAttendanceRequestCreateRequest
 
 public class WorkshopAttendanceRequestResponse
 {
+    public string? WorkshopMode { get; set; }
     public string? RegionName { get; set; }
     public int WorkshopAttendanceRequestId { get; set; }
     public int BusinessId { get; set; }
