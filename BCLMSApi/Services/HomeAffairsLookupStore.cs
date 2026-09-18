@@ -7,7 +7,7 @@ using Microsoft.Data.SqlClient;
 
 namespace BCLMSApi.Services;
 
-public sealed class HomeAffairsLookupStore(Datalayer database, IHanisVerificationService hanis, ISystemSettingsService settings, IConfiguration configuration)
+public sealed class HomeAffairsLookupStore(Datalayer database, IHanisVerificationService hanis, IConfiguration configuration, IHostEnvironment environment)
 {
     public async Task<HanisVerificationService.HanisResult?> GetAsync(
         InternalApplicationDetailResponse application, UserTokenPayload user, bool refresh, bool savedOnly)
@@ -25,7 +25,8 @@ public sealed class HomeAffairsLookupStore(Datalayer database, IHanisVerificatio
             throw new ArgumentException("Another identity lookup is running for this application. Please try again shortly.");
         try
         {
-            var source = (await settings.GetHanisSettingsAsync()).BaseUrl.TrimEnd('/');
+            var direct = HanisDirectOptions.Read(configuration, environment.IsDevelopment());
+            var source = $"direct-v5:{direct.Endpoint}|{direct.SiteId}|{direct.WorkstationId}";
             var now = DateTime.UtcNow;
             if (!refresh)
             {

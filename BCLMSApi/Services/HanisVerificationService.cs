@@ -1,6 +1,7 @@
 using System.Net;
-using System.Net.Http.Json;
-using System.Text.Json;
+using System.Text;
+using System.Xml;
+using ImageMagick;
 using System.Text.RegularExpressions;
 
 namespace BCLMSApi.Services;
@@ -11,8 +12,8 @@ public interface IHanisVerificationService
     Task<HanisVerificationService.HanisResult> LookupAsync(string idNumber, string applicantName, string username);
 }
 
-public sealed class HanisVerificationService(HttpClient client, ISystemSettingsService settings,
-    ILogger<HanisVerificationService> logger) : IHanisVerificationService
+public sealed class HanisVerificationService(HttpClient client, IConfiguration configuration,
+    ILogger<HanisVerificationService> logger, IHostEnvironment environment) : IHanisVerificationService
 {
     public async Task<string> VerifyAsync(string idNumber, string applicantName, string username)
         => ValidateResult(await LookupAsync(idNumber, applicantName, username), idNumber.Trim(), applicantName);
@@ -23,24 +24,21 @@ public sealed class HanisVerificationService(HttpClient client, ISystemSettingsS
         if (!Regex.IsMatch(idNumber, "^[0-9]{13}$", RegexOptions.CultureInvariant))
             throw new ArgumentException("Home Affairs requires a 13-digit South African ID. Passport applicants remain pending for manual verification.");
 
-        var hanisSettings = await settings.GetHanisSettingsAsync();
-        var key = await settings.GetHanisApiKeyAsync();
-        if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(hanisSettings.Username)
-            || !Uri.TryCreate(hanisSettings.BaseUrl, UriKind.Absolute, out var baseUri)
-            || (baseUri.Scheme != "https" && !(baseUri.Scheme == "http" && hanisSettings.AllowInsecureQa))
-            || !string.IsNullOrEmpty(baseUri.UserInfo) || !string.IsNullOrEmpty(baseUri.Query) || !string.IsNullOrEmpty(baseUri.Fragment))
-            throw new ArgumentException("Home Affairs verification is not configured. Contact the system administrator; this step remains pending.");
+        var options = HanisDirectOptions.Read(configuration, environment.IsDevelopment());
 
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(100));
         try
         {
             for (var attempt = 0; attempt < 3; attempt++)
             {
-                using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, "/api/lookup"));
-                request.Headers.Add("X-Api-Key", key);
-                request.Content = JsonContent.Create(new { idNumber, appUserName = hanisSettings.Username,
-                    appDepartment = hanisSettings.Department });
+                using var request = new HttpRequestMessage(HttpMethod.Post, options.Endpoint);
+                request.Headers.Add("SOAPAction", "\"http://HANIS.org/GetData\"");
+                var sentUtc = DateTimeOffset.UtcNow;
+                var transactionDate = sentUtc.ToOffset(TimeSpan.FromHours(2)).ToString("ddMMyyyy HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+                request.Content = new StringContent(HanisSoapCodec.Request(idNumber, options, sentUtc), Encoding.UTF8, "text/xml");
+               
                 using var response = await client.SendAsync(request, deadline.Token);
+
                 if (response.StatusCode == HttpStatusCode.ServiceUnavailable && attempt < 2)
                 {
                     await Task.Delay(TimeSpan.FromSeconds(1 << attempt), deadline.Token);
@@ -55,7 +53,19 @@ public sealed class HanisVerificationService(HttpClient client, ISystemSettingsS
                         _ => "Home Affairs is unavailable. Try again later; this step remains pending."
                     });
 
-                var result = await response.Content.ReadFromJsonAsync<HanisResult>(cancellationToken: deadline.Token);
+                HanisResult result;
+                try
+                {
+                    result = HanisSoapCodec.Parse(await response.Content.ReadAsStringAsync(deadline.Token));
+                }
+                catch (ArgumentException ex) when (ex.Data["HanisErrorCode"] is int code && code == 1056)
+                {
+                    // The HTTP Date may come from a proxy; use it as evidence, never as an authoritative clock.
+                    var providerDate = response.Headers.Date?.ToString("O") ?? "not supplied";
+                    logger.LogWarning("HANIS 1056: TransactionDate {TransactionDate}; format ddMMyyyy HHmmss; offset +02:00; sent UTC {SentUtc}; HTTP Date {ProviderDate}; local timezone {LocalTimezone}; trace {TraceId}",
+                        transactionDate, sentUtc, providerDate, TimeZoneInfo.Local.Id, System.Diagnostics.Activity.Current?.TraceId.ToString());
+                    throw new ArgumentException($"Home Affairs rejected the transaction date (1056). Sent TransactionDate={transactionDate}, format=ddMMyyyy HHmmss, timezone=UTC+02:00; API UTC={sentUtc:O}; provider HTTP Date={providerDate}. Confirm the expected timezone and format with DHA.");
+                }
                 if (!string.IsNullOrWhiteSpace(result?.HanisTransactionId))
                     logger.LogInformation("HANIS lookup completed for official {Official}; transaction {Transaction}; success {Success}",
                         username, result.HanisTransactionId, result.Success);
@@ -75,17 +85,17 @@ public sealed class HanisVerificationService(HttpClient client, ISystemSettingsS
                 return result;
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException ex)
         {
-            throw new ArgumentException("Home Affairs verification timed out. Try again; this step remains pending.");
+            throw new ArgumentException("Home Affairs verification timed out. Try again; this step remains pending.", ex);
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException ex)
         {
-            throw new ArgumentException("Cannot connect to Home Affairs. Try again later; this step remains pending.");
+            throw new ArgumentException("Cannot connect to Home Affairs. Try again later; this step remains pending.", ex);
         }
-        catch (JsonException)
+        catch (Exception error) when (error is XmlException or FormatException or MagickException)
         {
-            throw new ArgumentException("Home Affairs returned an invalid response. This step remains pending.");
+            throw new ArgumentException("Home Affairs returned an invalid response. This step remains pending.", error);
         }
         throw new ArgumentException("Home Affairs is unavailable. This step remains pending.");
     }
