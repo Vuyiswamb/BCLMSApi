@@ -7,7 +7,7 @@ namespace BCLMSApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class FormalBusinessController(IFormalBusinessService formalBusinessService, IUserTokenService userTokenService) : ControllerBase
+public class FormalBusinessController(IFormalBusinessService formalBusinessService, IUserTokenService userTokenService, ISmsService smsService) : ControllerBase
 {
     private const long MaxPdfBytes = 10 * 1024 * 1024;
     private const long MultipartRequestBytes = MaxPdfBytes + 1 * 1024 * 1024;
@@ -424,6 +424,57 @@ public class FormalBusinessController(IFormalBusinessService formalBusinessServi
 
         return Ok(await formalBusinessService.GetInternalApplicationsAsync(user));
     }
+
+    [HttpPost("applications/internal/payment-reminders")]
+    public async Task<ActionResult<PaymentReminderResponse>> SendPaymentReminders(PaymentReminderRequest request)
+    {
+        const int smsMaxLength = 130;
+        var user = userTokenService.GetValidTokenPayload(Request.Headers.Authorization);
+        if (user is null || user.IsCustomer)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Internal access is required to send payment reminders." });
+        }
+
+        var applicationIds = request.ApplicationIds.Where(id => id > 0).Distinct().ToList();
+        if (applicationIds.Count == 0)
+        {
+            return BadRequest(new { message = "Select at least one active application." });
+        }
+        if (string.IsNullOrWhiteSpace(request.SmsMessage))
+        {
+            return BadRequest(new { message = "SMS text is required." });
+        }
+        if (request.SmsMessage.Trim().Length > smsMaxLength)
+        {
+            return BadRequest(new { message = $"SMS text may not exceed {smsMaxLength} characters." });
+        }
+
+        var response = new PaymentReminderResponse { TotalApplications = applicationIds.Count };
+        foreach (var applicationId in applicationIds)
+        {
+            // This lookup also applies the caller's region access before a number is used.
+            var application = await formalBusinessService.GetInternalApplicationDetailAsync(applicationId, user);
+            if (application is null || IsClosedApplication(application.Status) || string.IsNullOrWhiteSpace(application.MobileNumber))
+            {
+                continue;
+            }
+
+            try
+            {
+                await smsService.SendSmsAsync(application.MobileNumber, request.SmsMessage.Trim());
+                response.SmsSent++;
+            }
+            catch
+            {
+                // Continue with the remaining selected recipients; the count makes partial delivery explicit.
+            }
+        }
+
+        response.Message = $"Payment reminders sent to {response.SmsSent} of {response.TotalApplications} selected application(s).";
+        return Ok(response);
+    }
+
+    private static bool IsClosedApplication(string status) => status.Trim().ToLowerInvariant() is "approved" or "rejected" or "cancelled" or "archived" or "completed";
 
     [HttpGet("applications/internal/{applicationId:int}")]
     public async Task<ActionResult<InternalApplicationDetailResponse>> GetInternalApplicationDetail(int applicationId)

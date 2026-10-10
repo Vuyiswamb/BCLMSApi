@@ -37,6 +37,19 @@ public class InternalApplicationSummaryResponse
     public bool ProofOfPaymentUploaded { get; set; }
 }
 
+public class PaymentReminderRequest
+{
+    public List<int> ApplicationIds { get; set; } = [];
+    public string SmsMessage { get; set; } = string.Empty;
+}
+
+public class PaymentReminderResponse
+{
+    public int TotalApplications { get; set; }
+    public int SmsSent { get; set; }
+    public string Message { get; set; } = string.Empty;
+}
+
 public class InternalApplicationDetailResponse : InternalApplicationSummaryResponse
 {
     public int? BusinessId { get; set; }

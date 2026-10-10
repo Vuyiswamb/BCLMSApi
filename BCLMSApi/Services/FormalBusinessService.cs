@@ -39,8 +39,7 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
                 "Health report",
                 "Fire report",
                 "Liquor licence",
-                "Gambling authority",
-                "Proof of payment"
+                "Gambling authority"
             ],
             DiaryDepartments =
             [
@@ -51,9 +50,10 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
         };
     }
 
-    public Task<List<AttachmentTypeResponse>> GetAttachmentTypesAsync()
+    public async Task<List<AttachmentTypeResponse>> GetAttachmentTypesAsync()
     {
-        return formalBusinessRepository.GetAttachmentTypesAsync();
+        var attachmentTypes = await formalBusinessRepository.GetAttachmentTypesAsync();
+        return attachmentTypes.Where(type => !type.TypeName.Equals("Proof of payment", StringComparison.OrdinalIgnoreCase)).ToList();
     }
 
     public Task<List<TownshipResponse>> GetTownshipsAsync()
@@ -220,6 +220,11 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
         if (attachmentType is null)
         {
             throw new ArgumentException("Invalid attachment type.");
+        }
+
+        if (attachmentType.TypeName.Equals("Proof of payment", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("Proof of payment uploads are no longer accepted. Please use the invoice payment reference.");
         }
 
         await using var stream = request.File.OpenReadStream();
@@ -475,17 +480,7 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
         request.ExpectedStepName = currentStep.StepName;
         request.ExpectedIdentityNumber = currentApplication.IdOrPassportNumber;
         request.ExpectedApplicantName = currentApplication.ApplicantName;
-        if (currentStep.StepName.Trim().Equals("Home Affairs Verification", StringComparison.OrdinalIgnoreCase)
-            && !decision.Equals("Reject", StringComparison.OrdinalIgnoreCase))
-        {
-            if (!decision.Equals("Approve", StringComparison.OrdinalIgnoreCase))
-                throw new ArgumentException("The Home Affairs step must be verified and approved.");
-            var transactionId = await hanisVerification.VerifyAsync(currentApplication.IdOrPassportNumber,
-                currentApplication.ApplicantName, user.Username);
-            var audit = $"Home Affairs identity and full name verified at {DateTime.UtcNow:O}. Transaction: {transactionId}.";
-            var comment = request.Comment?.Trim() ?? string.Empty;
-            request.Comment = audit + (comment.Length == 0 ? "" : " " + comment[..Math.Min(comment.Length, 499 - audit.Length)]);
-        }
+        // Home Affairs lookup is advisory. The assigned reviewer remains able to approve after reviewing its result.
 
         var updatedApplication = await formalBusinessRepository.ProcessWorkflowStepAsync(applicationId, request, user);
         if (updatedApplication is not null)
