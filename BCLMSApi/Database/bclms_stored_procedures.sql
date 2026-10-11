@@ -1324,19 +1324,7 @@ BEGIN
     DECLARE @TrackingNumber NVARCHAR(30);
     DECLARE @BusinessTypeId INT;
     DECLARE @SubmittedStatusId INT;
-    DECLARE @ComplianceGroupName NVARCHAR(80);
-    DECLARE @IsFormalBusiness BIT;
-
-    SET @IsFormalBusiness = CASE WHEN @LicenceType LIKE 'Formal Business%' THEN 1 ELSE 0 END;
-
-    SET @ComplianceGroupName = CASE
-        WHEN @AreaCategory LIKE '%Non Restricted%'
-          OR @AreaCategory LIKE '%Non-Restricted%'
-          OR @AreaCategory LIKE '%Non Declared%'
-          OR @AreaCategory LIKE '%Non-Declared%'
-            THEN 'Metro Police'
-        ELSE 'Compliance Officer'
-    END;
+    DECLARE @WorkflowTemplateId INT;
 
     SELECT @BusinessTypeId = BusinessTypeId
     FROM dbo.BusinessTypes
@@ -1416,49 +1404,21 @@ BEGIN
     SET TrackingNumber = @TrackingNumber
     WHERE ApplicationId = @ApplicationId;
 
-    INSERT dbo.ApplicationWorkflowSteps
-    (
-        ApplicationId,
-        StepName,
-        AssignedGroupId,
-        SequenceNumber,
-        Status,
-        StartedDate,
-        CompletedDate
-    )
-    SELECT
-        @ApplicationId,
-        workflow.StepName,
-        groups.GroupId,
-        workflow.SequenceNumber,
-        workflow.Status,
-        workflow.StartedDate,
-        workflow.CompletedDate
-    FROM
-    (
-        VALUES
-            (1, 'Workshop', 'Compliance Officer', 'Approved', GETDATE(), GETDATE(), 0),
-            (2, 'Application Submitted', 'Compliance Officer', 'Pending', NULL, NULL, 0),
-            (3, 'Home Affairs Verification', 'Compliance Officer', 'Pending', NULL, NULL, 0),
-            (4, 'TMPD Inspection (Site Inspection)', @ComplianceGroupName, 'Pending', NULL, NULL, 0),
-            (5, 'Admin Approval', 'Admin Officer', 'Pending', NULL, NULL, 0),
-            (6, 'Functional Head Approval', 'Functional Head', 'Pending', NULL, NULL, 0),
-            (7, 'Director Approval', 'Director', 'Pending', NULL, NULL, 0),
-            (8, 'Licence Issued', 'Compliance Officer', 'Pending', NULL, NULL, 0),
-            (1, 'Application intake', 'Compliance Officer', 'Pending', NULL, NULL, 1),
-            (2, 'Proof of payment verification', 'Compliance Officer', 'Pending', NULL, NULL, 1),
-            (3, 'CIPC verification', 'Compliance Officer', 'Pending', NULL, NULL, 1),
-            (4, 'Zoning verification', 'City Planning', 'Pending', NULL, NULL, 1),
-            (5, 'Health report', 'Health Department', 'Pending', NULL, NULL, 1),
-            (6, 'Fire report', 'Fire Department', 'Pending', NULL, NULL, 1),
-            (7, 'Senior specialist review', 'Senior Specialist', 'Pending', NULL, NULL, 1),
-            (8, 'Admin Approval', 'Admin Officer', 'Pending', NULL, NULL, 1),
-            (9, 'Functional Head Approval', 'Functional Head', 'Pending', NULL, NULL, 1),
-            (10, 'Director Approval', 'Director', 'Pending', NULL, NULL, 1),
-            (11, 'Licence Issued', 'Compliance Officer', 'Pending', NULL, NULL, 1)
-    ) AS workflow (SequenceNumber, StepName, GroupName, Status, StartedDate, CompletedDate, FormalOnly)
-    INNER JOIN dbo.Groups groups ON groups.GroupName = workflow.GroupName
-    WHERE workflow.FormalOnly = @IsFormalBusiness;
+    SELECT TOP 1 @WorkflowTemplateId = WorkflowTemplateId
+    FROM dbo.WorkflowTemplates
+    WHERE IsActive = 1 AND ApplicationType = @LicenceType;
+
+    IF @WorkflowTemplateId IS NULL AND @LicenceType LIKE 'Formal Business%'
+        SELECT TOP 1 @WorkflowTemplateId = WorkflowTemplateId FROM dbo.WorkflowTemplates WHERE IsActive = 1 AND ApplicationType = 'Formal Business';
+    IF @WorkflowTemplateId IS NULL
+        SELECT TOP 1 @WorkflowTemplateId = WorkflowTemplateId FROM dbo.WorkflowTemplates WHERE IsActive = 1 AND ApplicationType = 'Hawkers Licence';
+
+    INSERT dbo.ApplicationWorkflowSteps (ApplicationId, StepName, AssignedGroupId, SequenceNumber, Status, StartedDate, CompletedDate)
+    SELECT @ApplicationId, steps.StepName, steps.AssignedGroupId, steps.SequenceNumber, steps.InitialStatus,
+           CASE WHEN steps.InitialStatus = 'Approved' THEN GETDATE() ELSE NULL END,
+           CASE WHEN steps.InitialStatus = 'Approved' THEN GETDATE() ELSE NULL END
+    FROM dbo.WorkflowTemplateSteps steps
+    WHERE steps.WorkflowTemplateId = @WorkflowTemplateId;
 
     SELECT
         ApplicationId,

@@ -3,14 +3,13 @@ using BCLMSApi.Data;
 using BCLMSApi.Models;
 using BCLMSApi.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.SqlClient;
 
 namespace BCLMSApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 public class WorkshopController(
-    Datalayer datalayer,
+    WorkshopRepository workshopRepository,
     IEmailService emailService,
     ISmsService smsService,
     IUserTokenService userTokenService) : ControllerBase
@@ -28,27 +27,7 @@ public class WorkshopController(
 
         try
         {
-            var requests = new List<WorkshopAttendanceRequestResponse>();
-            await using var command = datalayer.CreateTextCommand(AttendanceRequestSelectSql + """
-
-                WHERE requests.IsActive = 1
-                ORDER BY
-                    CASE requests.Status WHEN 'Requested' THEN 0 WHEN 'Date Set' THEN 1 WHEN 'Invited' THEN 2 WHEN 'Attended' THEN 3 ELSE 4 END,
-                    requests.RequestedDate DESC;
-                """);
-
-            await command.Connection!.OpenAsync();
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                requests.Add(MapAttendanceRequest(reader));
-            }
-
-            return Ok(requests);
-        }
-        catch (SqlException error)
-        {
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = $"Unable to load workshop requests: {error.Message}" });
+            return Ok(await workshopRepository.GetInternalAsync());
         }
         catch (Exception error)
         {
@@ -67,27 +46,7 @@ public class WorkshopController(
 
         try
         {
-            var requests = new List<WorkshopAttendanceRequestResponse>();
-            await using var command = datalayer.CreateTextCommand(AttendanceRequestSelectSql + """
-
-                WHERE requests.IsActive = 1
-                  AND requests.UserId = @UserId
-                ORDER BY requests.RequestedDate DESC;
-                """);
-            command.Parameters.AddWithValue("@UserId", user.UserId);
-
-            await command.Connection!.OpenAsync();
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                requests.Add(MapAttendanceRequest(reader));
-            }
-
-            return Ok(requests);
-        }
-        catch (SqlException error)
-        {
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = $"Unable to load your workshop requests: {error.Message}" });
+            return Ok(await workshopRepository.GetMineAsync(user.UserId));
         }
         catch (Exception error)
         {
@@ -108,78 +67,8 @@ public class WorkshopController(
         {
             ValidateCreateRequest(request);
 
-            await using var command = datalayer.CreateTextCommand("""
-                IF NOT EXISTS
-                (
-                    SELECT 1
-                    FROM dbo.CustomerBusinesses
-                    WHERE BusinessId = @BusinessId
-                      AND UserId = @UserId
-                      AND IsActive = 1
-                )
-                BEGIN
-                    THROW 51001, 'Business not found for this customer.', 1;
-                END;
-
-                IF EXISTS
-                (
-                    SELECT 1
-                    FROM dbo.CustomerBusinesses
-                    WHERE BusinessId = @BusinessId
-                      AND COALESCE(WorkshopAttended, 0) = 1
-                )
-                BEGIN
-                    THROW 51002, 'Workshop attendance has already been recorded for this business.', 1;
-                END;
-
-                IF EXISTS
-                (
-                    SELECT 1
-                    FROM dbo.WorkshopAttendanceRequests
-                    WHERE BusinessId = @BusinessId
-                      AND IsActive = 1
-                      AND Status IN ('Requested', 'Date Set', 'Invited', 'Attended')
-                )
-                BEGIN
-                    THROW 51003, 'A workshop request already exists for this business.', 1;
-                END;
-
-                INSERT dbo.WorkshopAttendanceRequests
-                (
-                    BusinessId,
-                    UserId,
-                    RequestedLicenceType,
-                    WorkshopMode,
-                    Status,
-                    RequestedDate,
-                    Notes,
-                    IsActive,
-                    CreatedDate
-                )
-                VALUES
-                (
-                    @BusinessId,
-                    @UserId,
-                    @RequestedLicenceType,
-                    @WorkshopMode,
-                    'Requested',
-                    SYSUTCDATETIME(),
-                    @Notes,
-                    1,
-                    SYSUTCDATETIME()
-                );
-
-                SELECT CONVERT(INT, SCOPE_IDENTITY()) AS WorkshopAttendanceRequestId;
-                """);
-            command.Parameters.AddWithValue("@BusinessId", request.BusinessId);
-            command.Parameters.AddWithValue("@UserId", user.UserId);
-            command.Parameters.AddWithValue("@RequestedLicenceType", request.RequestedLicenceType.Trim());
-            command.Parameters.AddWithValue("@WorkshopMode", request.WorkshopMode);
-            command.Parameters.AddWithValue("@Notes", string.IsNullOrWhiteSpace(request.Notes) ? DBNull.Value : request.Notes.Trim());
-
-            await command.Connection!.OpenAsync();
-            var requestId = Convert.ToInt32(await command.ExecuteScalarAsync());
-            var created = await GetAttendanceRequestAsync(requestId);
+            var requestId = await workshopRepository.CreateAsync(request,user.UserId);
+            var created = await workshopRepository.GetByIdAsync(requestId);
             return created is null
                 ? StatusCode(StatusCodes.Status500InternalServerError, new { message = "Workshop request was created but could not be loaded." })
                 : Ok(created);
@@ -188,11 +77,11 @@ public class WorkshopController(
         {
             return BadRequest(new { message = error.Message });
         }
-        catch (SqlException error) when (error.Number is 51001 or 51002 or 51003)
+        catch (WorkshopRepositoryException error) when (error.Number is 51001 or 51002 or 51003)
         {
             return BadRequest(new { message = error.Message });
         }
-        catch (SqlException error)
+        catch (WorkshopRepositoryException error)
         {
             return StatusCode(StatusCodes.Status500InternalServerError, new { message = $"Workshop request database error: {error.Message}" });
         }
@@ -211,37 +100,7 @@ public class WorkshopController(
             return StatusCode(StatusCodes.Status403Forbidden, new { message = "Internal access is required to manage workshop attendance." });
         }
 
-        await using var command = datalayer.CreateTextCommand("""
-            DECLARE @BusinessId INT;
-
-            SELECT @BusinessId = BusinessId
-            FROM dbo.WorkshopAttendanceRequests
-            WHERE WorkshopAttendanceRequestId = @RequestId
-              AND IsActive = 1;
-
-            IF @BusinessId IS NULL
-            BEGIN
-                SELECT CONVERT(BIT, 0);
-                RETURN;
-            END;
-
-            UPDATE dbo.WorkshopAttendanceRequests
-            SET Status = 'Attended',
-                AttendedDate = COALESCE(AttendedDate, SYSUTCDATETIME()),
-                ModifiedDate = SYSUTCDATETIME()
-            WHERE WorkshopAttendanceRequestId = @RequestId;
-
-            UPDATE dbo.CustomerBusinesses
-            SET WorkshopAttended = 1,
-                WorkshopAttendedDate = COALESCE(WorkshopAttendedDate, SYSUTCDATETIME()),
-                ModifiedDate = SYSUTCDATETIME()
-            WHERE BusinessId = @BusinessId;
-
-            SELECT CONVERT(BIT, 1);
-            """);
-        command.Parameters.AddWithValue("@RequestId", requestId);
-        await command.Connection!.OpenAsync();
-        var affected = Convert.ToBoolean(await command.ExecuteScalarAsync());
+        var affected = await workshopRepository.MarkAttendedAsync(requestId);
         return affected
             ? Ok(new { message = "Workshop attendance recorded." })
             : NotFound(new { message = "Workshop request not found." });
@@ -261,38 +120,16 @@ public class WorkshopController(
             return BadRequest(new { message = "Select a workshop date." });
         }
 
-        try
-        {
-            await using var command = datalayer.CreateTextCommand("""
-                UPDATE dbo.WorkshopAttendanceRequests
-                SET ScheduledWorkshopDate = @ScheduledWorkshopDate,
-                    Status = 'Date Set',
-                    ModifiedDate = SYSUTCDATETIME()
-                WHERE WorkshopAttendanceRequestId = @RequestId
-                  AND IsActive = 1
-                  AND Status <> 'Attended';
-
-                SELECT @@ROWCOUNT;
-                """);
-            command.Parameters.AddWithValue("@RequestId", requestId);
-            command.Parameters.AddWithValue("@ScheduledWorkshopDate", request.ScheduledWorkshopDate.Value.Date);
-            await command.Connection!.OpenAsync();
-
-            var affected = Convert.ToInt32(await command.ExecuteScalarAsync());
-            if (affected == 0)
+        var affected = await workshopRepository.ScheduleAsync(requestId,request.ScheduledWorkshopDate.Value);
+            if (!affected)
             {
                 return NotFound(new { message = "Workshop request not found or already attended." });
             }
 
-            var updated = await GetAttendanceRequestAsync(requestId);
+            var updated = await workshopRepository.GetByIdAsync(requestId);
             return updated is null
                 ? NotFound(new { message = "Workshop request not found." })
                 : Ok(updated);
-        }
-        catch (SqlException error)
-        {
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = $"Unable to schedule workshop date: {error.Message}" });
-        }
     }
 
     [HttpPost("invitations")]
@@ -312,7 +149,7 @@ public class WorkshopController(
 
             foreach (var attendanceRequestId in requestIds)
             {
-                var attendanceRequest = await GetAttendanceRequestAsync(attendanceRequestId);
+                var attendanceRequest = await workshopRepository.GetByIdAsync(attendanceRequestId);
                 if (attendanceRequest is null)
                 {
                     response.Recipients.Add(new WorkshopInvitationRecipientResult { WorkshopAttendanceRequestId = attendanceRequestId, Error = "Workshop request not found." });
@@ -362,7 +199,7 @@ public class WorkshopController(
 
                 if (result.EmailSent || result.SmsSent)
                 {
-                    await MarkRequestInvitedAsync(attendanceRequest.WorkshopAttendanceRequestId);
+                    await workshopRepository.MarkInvitedAsync(attendanceRequest.WorkshopAttendanceRequestId);
                 }
 
                 response.Recipients.Add(result);
@@ -424,83 +261,7 @@ public class WorkshopController(
         }
     }
 
-    private async Task MarkRequestInvitedAsync(int requestId)
-    {
-        await using var command = datalayer.CreateTextCommand("""
-            UPDATE dbo.WorkshopAttendanceRequests
-            SET Status = CASE WHEN Status = 'Requested' THEN 'Invited' ELSE Status END,
-                InvitedDate = COALESCE(InvitedDate, SYSUTCDATETIME()),
-                ModifiedDate = SYSUTCDATETIME()
-            WHERE WorkshopAttendanceRequestId = @RequestId
-              AND IsActive = 1;
-            """);
-        command.Parameters.AddWithValue("@RequestId", requestId);
-        await command.Connection!.OpenAsync();
-        await command.ExecuteNonQueryAsync();
-    }
-
-    private async Task<WorkshopAttendanceRequestResponse?> GetAttendanceRequestAsync(int requestId)
-    {
-        await using var command = datalayer.CreateTextCommand(AttendanceRequestSelectSql + """
-
-            WHERE requests.WorkshopAttendanceRequestId = @RequestId
-              AND requests.IsActive = 1;
-            """);
-        command.Parameters.AddWithValue("@RequestId", requestId);
-        await command.Connection!.OpenAsync();
-        await using var reader = await command.ExecuteReaderAsync();
-        return await reader.ReadAsync() ? MapAttendanceRequest(reader) : null;
-    }
-
-    private static WorkshopAttendanceRequestResponse MapAttendanceRequest(SqlDataReader reader)
-    {
-        return new WorkshopAttendanceRequestResponse
-        {
-            WorkshopAttendanceRequestId = reader.GetInt32(reader.GetOrdinal("WorkshopAttendanceRequestId")),
-            BusinessId = reader.GetInt32(reader.GetOrdinal("BusinessId")),
-            UserId = reader.GetInt32(reader.GetOrdinal("UserId")),
-            RequestedLicenceType = reader.GetString(reader.GetOrdinal("RequestedLicenceType")),
-            WorkshopMode = reader.IsDBNull(reader.GetOrdinal("WorkshopMode")) ? null : reader.GetString(reader.GetOrdinal("WorkshopMode")),
-            Status = reader.GetString(reader.GetOrdinal("Status")),
-            RequestedDate = reader.GetDateTime(reader.GetOrdinal("RequestedDate")),
-            ScheduledWorkshopDate = reader.IsDBNull(reader.GetOrdinal("ScheduledWorkshopDate")) ? null : reader.GetDateTime(reader.GetOrdinal("ScheduledWorkshopDate")),
-            InvitedDate = reader.IsDBNull(reader.GetOrdinal("InvitedDate")) ? null : reader.GetDateTime(reader.GetOrdinal("InvitedDate")),
-            AttendedDate = reader.IsDBNull(reader.GetOrdinal("AttendedDate")) ? null : reader.GetDateTime(reader.GetOrdinal("AttendedDate")),
-            Notes = reader.IsDBNull(reader.GetOrdinal("Notes")) ? null : reader.GetString(reader.GetOrdinal("Notes")),
-            BusinessName = reader.GetString(reader.GetOrdinal("BusinessName")),
-            OwnerName = reader.GetString(reader.GetOrdinal("OwnerName")),
-            EmailAddress = reader.GetString(reader.GetOrdinal("EmailAddress")),
-            RegionName = reader.IsDBNull(reader.GetOrdinal("RegionName")) ? null : reader.GetString(reader.GetOrdinal("RegionName")),
-            MobileNumber = reader.GetString(reader.GetOrdinal("MobileNumber")),
-            TownshipName = reader.IsDBNull(reader.GetOrdinal("TownshipName")) ? null : reader.GetString(reader.GetOrdinal("TownshipName"))
-        };
-    }
-
-    private const string AttendanceRequestSelectSql = """
-        SELECT
-            requests.WorkshopAttendanceRequestId,
-            requests.BusinessId,
-            requests.UserId,
-            requests.RequestedLicenceType,
-            requests.WorkshopMode,
-            requests.Status,
-            requests.RequestedDate,
-            requests.ScheduledWorkshopDate,
-            requests.InvitedDate,
-            requests.AttendedDate,
-            requests.Notes,
-            businesses.BusinessName,
-            COALESCE(NULLIF(users.DisplayName, ''), users.Username) AS OwnerName,
-            COALESCE(NULLIF(users.EmailAddress, ''), users.Username) AS EmailAddress,
-            COALESCE(businesses.TelephoneNumber, '') AS MobileNumber,
-            NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(100), townships.REGION))), '') AS RegionName,
-            townships.TOWNSHIP AS TownshipName
-        FROM dbo.WorkshopAttendanceRequests requests
-        INNER JOIN dbo.CustomerBusinesses businesses ON businesses.BusinessId = requests.BusinessId
-        INNER JOIN dbo.Users users ON users.UserId = requests.UserId
-        LEFT JOIN dbo.TOWNSHIPS townships ON townships.ID = businesses.TownshipId
-
-        """;
+    
 
     private static string BuildEmailBody(string applicantName, string businessName, string preparedBody)
     {

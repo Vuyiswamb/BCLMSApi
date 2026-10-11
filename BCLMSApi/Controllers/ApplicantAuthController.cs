@@ -1,7 +1,6 @@
 using BCLMSApi.Models;
 using BCLMSApi.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.SqlClient;
 
 namespace BCLMSApi.Controllers;
 
@@ -25,7 +24,7 @@ public class ApplicantAuthController(IAuthService authService) : ControllerBase
         {
             return Conflict(new { message = error.Message });
         }
-        catch (SqlException)
+        catch (Exception)
         {
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "The database is currently unavailable. Please try again shortly." });
         }

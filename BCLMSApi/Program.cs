@@ -19,6 +19,16 @@ builder.Services.Configure<FormOptions>(options =>
 });
 builder.Services.AddControllers();
 builder.Services.AddScoped<Datalayer>();
+builder.Services.AddScoped<InvoiceRepository>();
+builder.Services.AddScoped<InvoiceItemRepository>();
+builder.Services.AddScoped<EventPremiseRepository>();
+builder.Services.AddScoped<DashboardRepository>();
+builder.Services.AddScoped<AuthDiagnosticsRepository>();
+builder.Services.AddScoped<StallsRepository>();
+builder.Services.AddScoped<PermitVerificationRepository>();
+builder.Services.AddScoped<AssistedIntakeRepository>();
+builder.Services.AddScoped<WorkflowTemplateRepository>();
+builder.Services.AddScoped<WorkshopRepository>();
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IFormalBusinessRepository, FormalBusinessRepository>();
 builder.Services.AddScoped<IComplaintRepository, ComplaintRepository>();

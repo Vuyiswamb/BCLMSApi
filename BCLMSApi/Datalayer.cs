@@ -18,6 +18,9 @@ public class Datalayer
         return CreateCommand(procedureName, CommandType.StoredProcedure);
     }
 
+    // Compatibility seam for legacy data-access code being migrated to procedures.
+    // New code must use CreateStoredProcedureCommand.
+    [Obsolete("Use CreateStoredProcedureCommand and a stored procedure instead.")]
     public SqlCommand CreateTextCommand(string commandText)
     {
         return CreateCommand(commandText, CommandType.Text);

@@ -1,7 +1,6 @@
 using BCLMSApi.Models;
 using BCLMSApi.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.SqlClient;
 
 namespace BCLMSApi.Controllers;
 
@@ -21,7 +20,7 @@ public class UserManagementController(IAuthService authService, IUserTokenServic
         {
             return Ok(await authService.GetGroupsAsync(includeCustomer: false));
         }
-        catch (SqlException)
+        catch (Exception)
         {
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "The database is currently unavailable. Permission groups could not be loaded." });
         }
@@ -39,7 +38,7 @@ public class UserManagementController(IAuthService authService, IUserTokenServic
         {
             return Ok(await authService.GetUsersAsync());
         }
-        catch (SqlException)
+        catch (Exception)
         {
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "The database is currently unavailable. Users could not be loaded." });
         }
@@ -65,7 +64,7 @@ public class UserManagementController(IAuthService authService, IUserTokenServic
         {
             return Conflict(new { message = error.Message });
         }
-        catch (SqlException)
+        catch (Exception)
         {
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "The database is currently unavailable. Please try again shortly." });
         }
@@ -95,7 +94,7 @@ public class UserManagementController(IAuthService authService, IUserTokenServic
         {
             return Conflict(new { message = error.Message });
         }
-        catch (SqlException)
+        catch (Exception)
         {
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "The database is currently unavailable. The official could not be updated." });
         }
@@ -125,7 +124,7 @@ public class UserManagementController(IAuthService authService, IUserTokenServic
         {
             return Conflict(new { message = error.Message });
         }
-        catch (SqlException)
+        catch (Exception)
         {
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "The database is currently unavailable. The password could not be reset." });
         }
@@ -155,7 +154,7 @@ public class UserManagementController(IAuthService authService, IUserTokenServic
         {
             return Conflict(new { message = error.Message });
         }
-        catch (SqlException)
+        catch (Exception)
         {
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "The database is currently unavailable. The password could not be set." });
         }

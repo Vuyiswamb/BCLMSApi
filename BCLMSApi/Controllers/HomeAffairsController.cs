@@ -49,11 +49,6 @@ public class HomeAffairsController(IFormalBusinessService applications, IUserTok
                 logger.LogError(error, "Home Affairs lookup failed for application {ApplicationId}", applicationId);
             return LookupError(400, error.Message, error);
         }
-        catch (Microsoft.Data.SqlClient.SqlException error)
-        {
-            logger.LogError(error, "Home Affairs lookup storage failed for application {ApplicationId}; SQL error {ErrorNumber}", applicationId, error.Number);
-            return LookupError(503, "Unable to load or save the Home Affairs lookup. Please try again; the workflow has not changed.", error);
-        }
         catch (Exception ex)
         {
             logger.LogError(ex, "Unexpected Home Affairs lookup failure for application {ApplicationId}", applicationId);

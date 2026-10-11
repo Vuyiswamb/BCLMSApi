@@ -1,14 +1,13 @@
-using System.Data;
+using BCLMSApi.Data;
 using BCLMSApi.Models;
 using BCLMSApi.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.SqlClient;
 
 namespace BCLMSApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AuthController(IAuthService authService, ILogger<AuthController> logger, IWebHostEnvironment environment, IConfiguration configuration) : ControllerBase
+public class AuthController(IAuthService authService, AuthDiagnosticsRepository diagnosticsRepository, ILogger<AuthController> logger, IWebHostEnvironment environment, IConfiguration configuration) : ControllerBase
 {
     [HttpGet("diagnostics")]
     public async Task<IActionResult> Diagnostics(string? username = null)
@@ -32,65 +31,15 @@ public class AuthController(IAuthService authService, ILogger<AuthController> lo
 
         try
         {
-            await using var connection = new SqlConnection(configuration.GetConnectionString("BclmsConnection"));
-            await connection.OpenAsync();
             diagnostics["databaseReachable"] = true;
-
-            await using (var command = new SqlCommand("""
-                SELECT
-                    CAST(CASE WHEN OBJECT_ID('dbo.usp_Auth_GetUserForLogin', 'P') IS NULL THEN 0 ELSE 1 END AS BIT) AS GetUserForLoginExists,
-                    CAST(CASE WHEN OBJECT_ID('dbo.usp_Auth_UpdateLastLogin', 'P') IS NULL THEN 0 ELSE 1 END AS BIT) AS UpdateLastLoginExists;
-                """, connection))
+            var data = await diagnosticsRepository.GetAsync(username);
+            diagnostics["authGetUserForLoginProcedureExists"] = data.GetUserForLoginProcedureExists;
+            diagnostics["authUpdateLastLoginProcedureExists"] = data.UpdateLastLoginProcedureExists;
+            if (data.User is not null)
             {
-                await using var reader = await command.ExecuteReaderAsync();
-                if (await reader.ReadAsync())
-                {
-                    diagnostics["authGetUserForLoginProcedureExists"] = reader.GetBoolean(reader.GetOrdinal("GetUserForLoginExists"));
-                    diagnostics["authUpdateLastLoginProcedureExists"] = reader.GetBoolean(reader.GetOrdinal("UpdateLastLoginExists"));
-                }
+                var user=data.User; diagnostics["userFound"]=true;diagnostics["userId"]=user.UserId;diagnostics["isActive"]=user.IsActive;diagnostics["hasPasswordHash"]=!string.IsNullOrWhiteSpace(user.PasswordHash);diagnostics["passwordHashIsBase64"]=IsBase64(user.PasswordHash);diagnostics["hasPasswordSalt"]=!string.IsNullOrWhiteSpace(user.PasswordSalt);diagnostics["passwordSaltIsBase64"]=IsBase64(user.PasswordSalt);diagnostics["passwordIterations"]=user.PasswordIterations;diagnostics["groupCount"]=user.GroupCount;
             }
-
-            if (!string.IsNullOrWhiteSpace(username))
-            {
-                await using var userCommand = new SqlCommand("""
-                    SELECT TOP (1)
-                        UserId,
-                        IsActive,
-                        PasswordHash,
-                        PasswordSalt,
-                        PasswordIterations,
-                        (
-                            SELECT COUNT(*)
-                            FROM dbo.UserGroups userGroups
-                            WHERE userGroups.UserId = users.UserId
-                        ) AS GroupCount
-                    FROM dbo.Users users
-                    WHERE users.Username = @Username
-                       OR users.EmailAddress = @Username;
-                    """, connection);
-                userCommand.Parameters.AddWithValue("@Username", username.Trim());
-
-                await using var userReader = await userCommand.ExecuteReaderAsync();
-                if (await userReader.ReadAsync())
-                {
-                    var passwordHash = userReader.IsDBNull(userReader.GetOrdinal("PasswordHash")) ? null : userReader.GetString(userReader.GetOrdinal("PasswordHash"));
-                    var passwordSalt = userReader.IsDBNull(userReader.GetOrdinal("PasswordSalt")) ? null : userReader.GetString(userReader.GetOrdinal("PasswordSalt"));
-
-                    diagnostics["userFound"] = true;
-                    diagnostics["userId"] = userReader.GetInt32(userReader.GetOrdinal("UserId"));
-                    diagnostics["isActive"] = userReader.GetBoolean(userReader.GetOrdinal("IsActive"));
-                    diagnostics["hasPasswordHash"] = !string.IsNullOrWhiteSpace(passwordHash);
-                    diagnostics["passwordHashIsBase64"] = IsBase64(passwordHash);
-                    diagnostics["hasPasswordSalt"] = !string.IsNullOrWhiteSpace(passwordSalt);
-                    diagnostics["passwordSaltIsBase64"] = IsBase64(passwordSalt);
-                    diagnostics["passwordIterations"] = userReader.GetInt32(userReader.GetOrdinal("PasswordIterations"));
-                    diagnostics["groupCount"] = userReader.GetInt32(userReader.GetOrdinal("GroupCount"));
-                }
-                else
-                {
-                    diagnostics["userFound"] = false;
-                }
-            }
+            else if (!string.IsNullOrWhiteSpace(username)) diagnostics["userFound"] = false;
 
             return Ok(diagnostics);
         }
@@ -124,11 +73,6 @@ public class AuthController(IAuthService authService, ILogger<AuthController> lo
             return response is null
                 ? Unauthorized(new { message = "Invalid username or password." })
                 : Ok(response);
-        }
-        catch (SqlException error)
-        {
-            logger.LogError(error, "Database error while signing in user {Username}.", username);
-            return LoginFailure(error);
         }
         catch (InvalidOperationException error)
         {
