@@ -22,13 +22,22 @@ public class InvoiceRepository(Datalayer datalayer)
 {
     public async Task SaveAsync(int applicationId, string reference, string gl, string linesJson)
     {
-        await using var command = datalayer.CreateStoredProcedureCommand("dbo.usp_Invoices_Save");
-        command.Parameters.AddWithValue("@ApplicationId", applicationId);
-        command.Parameters.AddWithValue("@PaymentReference", reference);
-        command.Parameters.AddWithValue("@GlAccountNumber", gl);
-        command.Parameters.AddWithValue("@LinesJson", linesJson);
-        await command.Connection!.OpenAsync();
-        await command.ExecuteNonQueryAsync();
+        try
+        {
+            await using var command = datalayer.CreateStoredProcedureCommand("dbo.usp_Invoices_Save");
+            command.Parameters.AddWithValue("@ApplicationId", applicationId);
+            command.Parameters.AddWithValue("@PaymentReference", reference);
+            command.Parameters.AddWithValue("@GlAccountNumber", gl);
+            command.Parameters.AddWithValue("@LinesJson", linesJson);
+            await command.Connection!.OpenAsync();
+            await command.ExecuteNonQueryAsync();
+        }
+        catch (SqlException error)
+        {
+            throw new InvalidOperationException(
+                "The invoice could not be saved. Verify that the invoice database tables and stored procedures have been deployed.",
+                error);
+        }
     }
 
     public async Task<InvoiceData?> GetAsync(int applicationId)

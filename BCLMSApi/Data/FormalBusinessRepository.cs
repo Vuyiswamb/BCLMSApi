@@ -1019,7 +1019,9 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
     {
         return new CustomerBusinessResponse
         {
-            TelephoneNumber = reader.IsDBNull(reader.GetOrdinal("TelephoneNumber")) ? null : reader.GetString(reader.GetOrdinal("TelephoneNumber")),
+            TelephoneNumber = HasColumn(reader, "TelephoneNumber") && !reader.IsDBNull(reader.GetOrdinal("TelephoneNumber"))
+                ? reader.GetString(reader.GetOrdinal("TelephoneNumber"))
+                : null,
             BusinessId = reader.GetInt32(reader.GetOrdinal("BusinessId")),
             UserId = reader.GetInt32(reader.GetOrdinal("UserId")),
             BusinessName = reader.GetString(reader.GetOrdinal("BusinessName")),

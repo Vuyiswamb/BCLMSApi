@@ -57,7 +57,8 @@ builder.Services.AddCors(options =>
         var allowedOrigins = builder.Configuration
             .GetSection("Portal:AllowedOrigins")
             .Get<string[]>()
-            ?? ["http://localhost:4200", "http://localhost:4201", "http://ce19viis071/", "http://ce19viis071/BCLMS/", "https://TBC.tshwane.gov.za", "https://spazashopregister.tshwane.gov.za/"];
+       ?? ["http://localhost:4200", "http://localhost:4201", "http://ce19viis071/", "http://ce19viis071/BCLMS/", "https://TBC.tshwane.gov.za", "https://spazashopregister.tshwane.gov.za/"];
+
 
         policy
             .WithOrigins(allowedOrigins)

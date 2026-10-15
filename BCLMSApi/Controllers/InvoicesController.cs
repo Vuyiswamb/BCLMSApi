@@ -11,7 +11,23 @@ public class InvoicesController(InvoiceRepository repository, IUserTokenService 
 {
     [HttpPost]
     public async Task<ActionResult> Save(InvoiceRequest request)
-    { if (tokens.GetValidTokenPayload(Request.Headers.Authorization) is null) return Unauthorized(); await repository.SaveAsync(request.ApplicationId,request.PaymentReference,request.GlAccountNumber,JsonSerializer.Serialize(request.Lines)); return Ok(); }
+    {
+        if (tokens.GetValidTokenPayload(Request.Headers.Authorization) is null) return Unauthorized();
+        if (request.ApplicationId <= 0 || request.Lines.Count == 0)
+        {
+            return BadRequest(new { message = "A valid application and at least one invoice line are required." });
+        }
+
+        try
+        {
+            await repository.SaveAsync(request.ApplicationId, request.PaymentReference, request.GlAccountNumber, JsonSerializer.Serialize(request.Lines));
+            return Ok();
+        }
+        catch (InvalidOperationException error)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = error.Message });
+        }
+    }
     [HttpGet("{applicationId:int}")]
     public async Task<ActionResult> Get(int applicationId)
     { if (tokens.GetValidTokenPayload(Request.Headers.Authorization) is null) return Unauthorized(); var invoice=await repository.GetAsync(applicationId); return invoice is null ? Ok(new {paymentReference="",glAccountNumber="",paymentStatus="Unavailable",lines=Array.Empty<object>()}) : Ok(invoice); }
