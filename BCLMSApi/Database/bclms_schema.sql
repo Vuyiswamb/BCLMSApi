@@ -278,6 +278,7 @@ BEGIN
         Username NVARCHAR(80) NOT NULL CONSTRAINT UQ_Users_Username UNIQUE,
         DisplayName NVARCHAR(150) NOT NULL,
         EmailAddress NVARCHAR(150) NULL,
+        TelephoneNumber NVARCHAR(40) NULL,
         PasswordHash NVARCHAR(200) NOT NULL,
         PasswordSalt NVARCHAR(100) NOT NULL,
         PasswordIterations INT NOT NULL,

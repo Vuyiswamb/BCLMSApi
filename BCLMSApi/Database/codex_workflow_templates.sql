@@ -110,6 +110,61 @@ BEGIN
     SELECT @WorkflowTemplateId, jsonSteps.StepName, groups.GroupId, jsonSteps.SequenceNumber, jsonSteps.InitialStatus, jsonSteps.IsRequired
     FROM OPENJSON(@StepsJson) WITH (StepName NVARCHAR(120) '$.StepName', AssignedGroupName NVARCHAR(80) '$.AssignedGroupName', SequenceNumber INT '$.SequenceNumber', InitialStatus NVARCHAR(40) '$.InitialStatus', IsRequired BIT '$.IsRequired') jsonSteps
     INNER JOIN dbo.Groups groups ON groups.GroupName = jsonSteps.AssignedGroupName;
+
+    -- Existing applications keep workflow status/audit data, but the template is
+    -- the source of truth for all unarchived applications. Keep completed steps
+    -- and their audit history, then rebuild the remaining steps from the template.
+    DECLARE @ApplicationId INT;
+    DECLARE @CompletedPrefix INT;
+    DECLARE application_cursor CURSOR LOCAL FAST_FORWARD FOR
+        SELECT applications.ApplicationId
+        FROM dbo.Applications applications
+        WHERE applications.LicenceType = LTRIM(RTRIM(@ApplicationType))
+          AND applications.Archive_Date IS NULL;
+
+    OPEN application_cursor;
+    FETCH NEXT FROM application_cursor INTO @ApplicationId;
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        SELECT @CompletedPrefix = COALESCE(MAX(SequenceNumber), 0)
+        FROM dbo.ApplicationWorkflowSteps
+        WHERE ApplicationId = @ApplicationId
+          AND (Status IN ('Approved', 'Completed') OR CompletedDate IS NOT NULL);
+
+        DELETE FROM dbo.ApplicationWorkflowSteps
+        WHERE ApplicationId = @ApplicationId
+          AND SequenceNumber > @CompletedPrefix;
+
+        INSERT dbo.ApplicationWorkflowSteps (ApplicationId, StepName, AssignedGroupId, SequenceNumber, Status, StartedDate, CompletedDate)
+        SELECT @ApplicationId,
+               steps.StepName,
+               steps.AssignedGroupId,
+               steps.SequenceNumber,
+               steps.InitialStatus,
+               CASE WHEN steps.InitialStatus = 'Approved' THEN GETDATE() ELSE NULL END,
+               CASE WHEN steps.InitialStatus = 'Approved' THEN GETDATE() ELSE NULL END
+        FROM dbo.WorkflowTemplateSteps steps
+        WHERE steps.WorkflowTemplateId = @WorkflowTemplateId
+          AND steps.SequenceNumber > @CompletedPrefix;
+
+        UPDATE applications
+        SET CurrentStage = COALESCE(
+            (SELECT TOP 1 steps.StepName
+             FROM dbo.WorkflowTemplateSteps steps
+             WHERE steps.WorkflowTemplateId = @WorkflowTemplateId
+               AND steps.SequenceNumber > @CompletedPrefix
+               AND steps.InitialStatus NOT IN ('Approved', 'Completed')
+             ORDER BY steps.SequenceNumber),
+            'Completed'),
+            ModifiedDate = GETDATE()
+        FROM dbo.Applications applications
+        WHERE applications.ApplicationId = @ApplicationId;
+
+        FETCH NEXT FROM application_cursor INTO @ApplicationId;
+    END;
+    CLOSE application_cursor;
+    DEALLOCATE application_cursor;
+
     COMMIT TRANSACTION;
     SELECT templates.WorkflowTemplateId, templates.ApplicationType, templates.TemplateName, templates.IsActive, steps.WorkflowTemplateStepId, steps.StepName, groups.GroupName AS AssignedGroupName, steps.SequenceNumber, steps.InitialStatus, steps.IsRequired
     FROM dbo.WorkflowTemplates templates INNER JOIN dbo.WorkflowTemplateSteps steps ON steps.WorkflowTemplateId = templates.WorkflowTemplateId INNER JOIN dbo.Groups groups ON groups.GroupId = steps.AssignedGroupId

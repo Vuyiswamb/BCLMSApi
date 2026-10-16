@@ -127,6 +127,7 @@ CREATE OR ALTER PROCEDURE dbo.usp_CustomerBusinesses_Create
     @WardNumber NVARCHAR(20) = NULL,
     @PhysicalAddress NVARCHAR(300),
     @Notes NVARCHAR(1000) = NULL,
+    @TelephoneNumber NVARCHAR(40) = NULL,
     @BusinessPhotoContentType NVARCHAR(100) = NULL,
     @BusinessPhotoContent VARBINARY(MAX) = NULL,
     @CipcDocumentFileName NVARCHAR(260) = NULL,
@@ -149,6 +150,7 @@ BEGIN
         WardNumber,
         PhysicalAddress,
         Notes,
+        TelephoneNumber,
         BusinessPhotoContentType,
         BusinessPhotoContent
     )
@@ -162,6 +164,7 @@ BEGIN
         NULLIF(@WardNumber, ''),
         @PhysicalAddress,
         NULLIF(@Notes, ''),
+        NULLIF(@TelephoneNumber, ''),
         NULLIF(@BusinessPhotoContentType, ''),
         @BusinessPhotoContent
     );
@@ -227,6 +230,7 @@ CREATE OR ALTER PROCEDURE dbo.usp_CustomerBusinesses_Update
     @WardNumber NVARCHAR(20) = NULL,
     @PhysicalAddress NVARCHAR(300),
     @Notes NVARCHAR(1000) = NULL,
+    @TelephoneNumber NVARCHAR(40) = NULL,
     @BusinessPhotoContentType NVARCHAR(100) = NULL,
     @BusinessPhotoContent VARBINARY(MAX) = NULL,
     @CipcDocumentFileName NVARCHAR(260) = NULL,
@@ -246,6 +250,7 @@ BEGIN
         WardNumber = NULLIF(@WardNumber, ''),
         PhysicalAddress = @PhysicalAddress,
         Notes = NULLIF(@Notes, ''),
+        TelephoneNumber = NULLIF(@TelephoneNumber, ''),
         BusinessPhotoContent = COALESCE(@BusinessPhotoContent, BusinessPhotoContent),
         BusinessPhotoContentType = CASE WHEN @BusinessPhotoContent IS NULL THEN BusinessPhotoContentType ELSE NULLIF(@BusinessPhotoContentType, '') END,
         ModifiedDate = SYSUTCDATETIME()

@@ -316,9 +316,9 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
             return await formalBusinessRepository.SubmitApplicationAsync(request, licenceType, userId);
 
         }
-        catch(Exception)
+        catch(Exception ex)
         {
-            throw;
+            throw ex;
         }
 
 

@@ -122,10 +122,9 @@ public class AssistedIntakeController(AssistedIntakeRepository intakeRepository,
     [HttpPost("{intakeId:int}/application")]
     public Task<IActionResult> Submit(int intakeId, ApplicationSubmitRequest request) => Execute(async () => {
         var staff = Staff();
-        using var transaction = Transaction();
         var intake = await Read(intakeId, staff);
         var business = await LinkedBusiness(intake, staff);
-        if (intake.Response is not null) { transaction.Complete(); return JsonSerializer.Deserialize<ApplicationSubmitResponse>(intake.Response)!; }
+        if (intake.Response is not null) return JsonSerializer.Deserialize<ApplicationSubmitResponse>(intake.Response)!;
         if (request.BusinessId != business.BusinessId) throw new ArgumentException("Select the business linked to this assisted intake.");
         var separateTradingLocation = request.LicenceType.Contains("Event", StringComparison.OrdinalIgnoreCase)
             || request.LicenceType.Contains("Food Vending", StringComparison.OrdinalIgnoreCase);
@@ -140,7 +139,6 @@ public class AssistedIntakeController(AssistedIntakeRepository intakeRepository,
         request.Phone = intake.Phone;
         var result = await applications.SubmitApplicationAsync(request, intake.CustomerUserId);
         await intakeRepository.SaveApplicationAsync(intakeId,result.ApplicationId,JsonSerializer.Serialize(result));
-        transaction.Complete();
         return result;
     });
 

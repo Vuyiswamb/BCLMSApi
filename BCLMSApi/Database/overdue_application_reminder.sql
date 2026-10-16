@@ -31,7 +31,7 @@ BEGIN
           FROM dbo.OverdueApplicationReminderLog AS logEntry
           WHERE logEntry.ApplicationId = a.ApplicationId
             AND logEntry.UserId = u.UserId
-            AND logEntry.ReminderDate = CONVERT(date, SYSUTCDATETIME())
+            AND logEntry.ReminderDate >= DATEADD(DAY, -6, CONVERT(date, SYSUTCDATETIME()))
       );
 END;
 GO

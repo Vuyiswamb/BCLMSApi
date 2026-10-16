@@ -43,6 +43,7 @@ builder.Services.AddHttpClient<IHanisVerificationService, HanisVerificationServi
 builder.Services.AddScoped<IComplaintService, ComplaintService>();
 builder.Services.AddScoped<ComplaintConversationService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddHostedService<OverdueEscalationHostedService>();
 builder.Services.AddHttpClient<ISmsService, SmsService>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(30);
