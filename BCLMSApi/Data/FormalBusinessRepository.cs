@@ -367,6 +367,11 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
         }
         catch (SqlException ex)
         {
+            if (ex.Number == 50010)
+            {
+                throw new ArgumentException(ex.Message, ex);
+            }
+
             throw CreateDatabaseException("archive application", ex);
         }
     }

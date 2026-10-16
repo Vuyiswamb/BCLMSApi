@@ -266,6 +266,10 @@ public class FormalBusinessController(IFormalBusinessService formalBusinessServi
         {
             return StatusCode(StatusCodes.Status403Forbidden, new { message = error.Message });
         }
+        catch (ArgumentException error)
+        {
+            return BadRequest(new { message = error.Message });
+        }
     }
 
     [HttpGet("businesses/{businessId:int}")]

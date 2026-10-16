@@ -1264,6 +1264,24 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    IF EXISTS
+    (
+        SELECT 1
+        FROM dbo.ApplicationInvoices
+        WHERE ApplicationId = @ApplicationId
+          AND PaymentStatus = 'Confirmed'
+    )
+    OR EXISTS
+    (
+        SELECT 1
+        FROM dbo.ApplicationPaymentTransactions
+        WHERE ApplicationId = @ApplicationId
+          AND PaymentStatus = 'Cleared'
+    )
+    BEGIN
+        THROW 50010, 'Paid applications cannot be archived.', 1;
+    END;
+
     UPDATE dbo.Applications
     SET Archive_Date = SYSUTCDATETIME(),
         archive_user_id = @ArchiveUserId,
