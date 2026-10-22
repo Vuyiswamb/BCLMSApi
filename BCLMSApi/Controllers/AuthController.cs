@@ -108,7 +108,7 @@ public class AuthController(IAuthService authService, AuthDiagnosticsRepository 
         catch (Exception error)
         {
             logger.LogError(error, "Unexpected error while requesting password reset.");
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Unable to request a password reset right now." });
+            return PasswordResetFailure(error);
         }
     }
 
@@ -177,6 +177,22 @@ public class AuthController(IAuthService authService, AuthDiagnosticsRepository 
             errorType = error.GetType().Name,
             detail = error.Message,
             innerDetail = error.InnerException?.Message
+        });
+    }
+
+    private ObjectResult PasswordResetFailure(Exception error)
+    {
+        var rootError = error;
+        while (rootError.InnerException is not null)
+        {
+            rootError = rootError.InnerException;
+        }
+
+        return StatusCode(StatusCodes.Status500InternalServerError, new
+        {
+            message = rootError.ToString(),
+            errorType = rootError.GetType().FullName,
+            detail = rootError.Message
         });
     }
 

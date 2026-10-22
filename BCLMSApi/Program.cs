@@ -21,6 +21,7 @@ builder.Services.AddControllers();
 builder.Services.AddScoped<Datalayer>();
 builder.Services.AddScoped<InvoiceRepository>();
 builder.Services.AddScoped<InvoiceItemRepository>();
+builder.Services.AddScoped<ApplicationLookupRepository>();
 builder.Services.AddScoped<EventPremiseRepository>();
 builder.Services.AddScoped<DashboardRepository>();
 builder.Services.AddScoped<AuthDiagnosticsRepository>();

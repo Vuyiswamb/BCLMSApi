@@ -24,6 +24,14 @@ public interface IFormalBusinessRepository
 
     Task<InternalApplicationDetailResponse?> GetInternalApplicationDetailAsync(int applicationId, int? customerUserId = null, bool hasAllRegions = true, IReadOnlyCollection<string>? regionNames = null);
 
+    Task<List<ManagedUserResponse>> GetComplianceOfficersAsync();
+
+    Task<List<ApplicationComplianceOfficerAssignmentResponse>> GetApplicationComplianceOfficerAssignmentsAsync(int applicationId);
+
+    Task<ApplicationComplianceOfficerAssignmentResponse> SaveApplicationComplianceOfficerAssignmentAsync(int applicationId, int complianceOfficerUserId, string processStepName, int assignedByUserId);
+
+    Task<bool> RemoveApplicationComplianceOfficerAssignmentAsync(int applicationId, int assignmentId);
+
     Task<ApplicationDocumentFileResponse?> GetApplicationDocumentFileAsync(int applicationId, int applicationDocumentId, int? customerUserId = null);
 
     Task<bool> ArchiveApplicationAsync(int applicationId, int archiveUserId);

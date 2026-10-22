@@ -183,7 +183,9 @@ public class WorkshopController(
                     }
                 }
 
-                if (request.SendSms && !string.IsNullOrWhiteSpace(attendanceRequest.MobileNumber))
+                if (request.SendSms
+                    && !string.Equals(attendanceRequest.Status, "Attended", StringComparison.OrdinalIgnoreCase)
+                    && !string.IsNullOrWhiteSpace(attendanceRequest.MobileNumber))
                 {
                     try
                     {

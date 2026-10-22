@@ -8,6 +8,8 @@ public sealed record DashboardCustomerRow(
     double? Latitude,
     double? Longitude);
 
+public sealed record DashboardRegistrationRow(int Year, int Month, int Count);
+
 public class DashboardRepository(Datalayer datalayer)
 {
     public async Task<List<DashboardCustomerRow>> GetCustomersAsync(CancellationToken cancellationToken)
@@ -29,5 +31,36 @@ public class DashboardRepository(Datalayer datalayer)
         }
 
         return customers;
+    }
+
+    public async Task<List<DashboardRegistrationRow>> GetCustomerRegistrationCountsAsync(CancellationToken cancellationToken)
+    {
+        // Keep the dashboard available while older environments are waiting for
+        // the accompanying stored-procedure deployment.
+        await using var command = datalayer.CreateTextCommand("""
+            SELECT YEAR(users.CreatedDate) AS [Year], MONTH(users.CreatedDate) AS [Month], COUNT(*) AS [Count]
+            FROM dbo.Users users
+            WHERE EXISTS
+            (
+                SELECT 1
+                FROM dbo.UserGroups userGroups
+                INNER JOIN dbo.Groups groups ON groups.GroupId = userGroups.GroupId
+                WHERE userGroups.UserId = users.UserId
+                  AND groups.IsActive = 1
+                  AND groups.GroupName = 'Customer'
+            )
+            GROUP BY YEAR(users.CreatedDate), MONTH(users.CreatedDate)
+            ORDER BY [Year], [Month];
+            """);
+        await command.Connection!.OpenAsync(cancellationToken);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        var registrations = new List<DashboardRegistrationRow>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            registrations.Add(new DashboardRegistrationRow(reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2)));
+        }
+
+        return registrations;
     }
 }

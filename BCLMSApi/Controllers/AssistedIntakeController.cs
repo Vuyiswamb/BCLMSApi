@@ -27,12 +27,28 @@ public class AssistedIntakeController(AssistedIntakeRepository intakeRepository,
         new TransactionOptions { IsolationLevel = System.Transactions.IsolationLevel.Serializable, Timeout = TimeSpan.FromMinutes(2) },
         TransactionScopeAsyncFlowOption.Enabled);
 
+    private static bool IsDuplicateUserException(Exception error)
+    {
+        for (Exception? current = error; current is not null; current = current.InnerException)
+        {
+            var message = current.Message;
+            if (message.Contains("UQ_Users_Username", StringComparison.OrdinalIgnoreCase)
+                || (message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase)
+                    && message.Contains("dbo.Users", StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private async Task<IActionResult> Execute(Func<Task<object>> action) {
         try { return Ok(await action()); }
         catch (UnauthorizedAccessException error) { return StatusCode(403, new { message = error.Message }); }
         catch (KeyNotFoundException error) { return NotFound(new { message = error.Message }); }
         catch (ArgumentException error) { return BadRequest(new { message = error.Message }); }
-        catch (InvalidOperationException) { return Conflict(new { message = "The request could not be completed. Check the account details and try again." }); }
+        catch (InvalidOperationException error) { return Conflict(new { message = error.Message }); }
     }
 
     [HttpGet]
@@ -42,27 +58,62 @@ public class AssistedIntakeController(AssistedIntakeRepository intakeRepository,
     });
 
     [HttpPost]
-    public Task<IActionResult> Start(AssistedRegistrationRequest request) => Execute(async () => {
-        var staff = Staff();
-        if (!request.OwnerPresent) throw new ArgumentException("Confirm that the business owner is present and has requested assistance.");
-        if (string.IsNullOrWhiteSpace(request.Customer.FullName) || request.Customer.FullName.Length > 150 ||
-            string.IsNullOrWhiteSpace(request.Customer.IdNumber) || request.Customer.IdNumber.Length > 80 ||
-            string.IsNullOrWhiteSpace(request.Customer.Phone) || request.Customer.Phone.Length > 40 ||
-            request.Customer.Email.Length > 80 || !new EmailAddressAttribute().IsValid(request.Customer.Email))
-            throw new ArgumentException("Enter the owner's name, ID or passport number, valid email address and phone number.");
-        using var transaction = Transaction();
-        int customerId;
-        if (request.ExistingCustomer) {
-            customerId = await intakeRepository.FindCustomerAsync(request.Customer.Email) ?? throw new KeyNotFoundException("No active Customer account was found for this email address.");
-        } else {
-            // Create a normal customer account; never sign the operator in as the customer.
-            customerId = (await auth.RegisterCustomerAsync(request.Customer, sendWelcomeEmail: false)).UserId;
+    public async Task<IActionResult> Start(AssistedRegistrationRequest request)
+    {
+        try
+        {
+            return await Execute(async () =>
+            {
+                var staff = Staff();
+                if (!request.OwnerPresent)
+                    throw new ArgumentException("Confirm that the business owner is present and has requested assistance.");
+
+                var customer = request.Customer;
+                if (customer is null ||
+                    string.IsNullOrWhiteSpace(customer.FullName) || customer.FullName.Length > 150 ||
+                    string.IsNullOrWhiteSpace(customer.IdNumber) || customer.IdNumber.Length > 80 ||
+                    string.IsNullOrWhiteSpace(customer.Phone) || customer.Phone.Length > 40 ||
+                    string.IsNullOrWhiteSpace(customer.Email) || customer.Email.Length > 80 ||
+                    !new EmailAddressAttribute().IsValid(customer.Email))
+                {
+                    throw new ArgumentException("Enter the owner's name, ID or passport number, valid email address and phone number.");
+                }
+
+                using var transaction = Transaction();
+                int customerId;
+                if (request.ExistingCustomer)
+                {
+                    customerId = await intakeRepository.FindCustomerAsync(customer.Email)
+                        ?? throw new KeyNotFoundException("No active Customer account was found for this email address.");
+                }
+                else
+                {
+                    // Create a normal customer account; never sign the operator in as the customer.
+                    customerId = (await auth.RegisterCustomerAsync(customer, sendWelcomeEmail: false)).UserId;
+                }
+
+                var intakeId = await intakeRepository.CreateAsync(staff.UserId, customerId, customer.IdNumber, customer.Phone);
+                transaction.Complete();
+                return new { intakeId, message = "Customer account ready. The owner can sign in using their email address and password." };
+            });
         }
-        int intakeId;
-        intakeId = await intakeRepository.CreateAsync(staff.UserId,customerId,request.Customer.IdNumber,request.Customer.Phone);
-        transaction.Complete();
-        return new { intakeId, message = "Customer account ready. The owner can sign in using their email address and password." };
-    });
+        catch (InvalidOperationException error)
+        {
+            return Conflict(new { message = error.Message });
+        }
+        catch (Exception error) when (IsDuplicateUserException(error))
+        {
+            return Conflict(new
+            {
+                message = "An account with this email address already exists. Select Existing customer to continue with that account."
+            });
+        }
+        catch (Exception)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { message = "Unable to start the assisted intake. Please try again or contact support." });
+        }
+    }
 
     [HttpGet("{intakeId:int}")]
     public Task<IActionResult> Get(int intakeId) => Execute(async () => {

@@ -30,6 +30,14 @@ public interface IFormalBusinessService
 
     Task<InternalApplicationDetailResponse?> GetInternalApplicationDetailAsync(int applicationId, UserTokenPayload user);
 
+    Task<List<ManagedUserResponse>> GetComplianceOfficersAsync(UserTokenPayload user);
+
+    Task<List<ApplicationComplianceOfficerAssignmentResponse>> GetApplicationComplianceOfficerAssignmentsAsync(int applicationId, UserTokenPayload user);
+
+    Task<ApplicationComplianceOfficerAssignmentResponse> SaveApplicationComplianceOfficerAssignmentAsync(int applicationId, ApplicationComplianceOfficerAssignmentRequest request, UserTokenPayload user);
+
+    Task<bool> RemoveApplicationComplianceOfficerAssignmentAsync(int applicationId, int assignmentId, UserTokenPayload user);
+
     Task<ApplicationDocumentFileResponse?> GetApplicationDocumentFileAsync(int applicationId, int applicationDocumentId, UserTokenPayload user);
 
     Task<bool> ArchiveApplicationAsync(int applicationId, UserTokenPayload user);

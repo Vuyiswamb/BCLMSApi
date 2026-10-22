@@ -227,6 +227,18 @@ BEGIN
 END;
 GO
 
+IF COL_LENGTH('dbo.Applications', 'PerishableGoodsType') IS NULL
+BEGIN
+    ALTER TABLE dbo.Applications ADD PerishableGoodsType NVARCHAR(1000) NULL;
+END;
+GO
+
+IF COL_LENGTH('dbo.Applications', 'NonPerishableGoodsType') IS NULL
+BEGIN
+    ALTER TABLE dbo.Applications ADD NonPerishableGoodsType NVARCHAR(1000) NULL;
+END;
+GO
+
 IF COL_LENGTH('dbo.Applications', 'RegionName') IS NULL
 BEGIN
     ALTER TABLE dbo.Applications ADD RegionName NVARCHAR(120) NULL;

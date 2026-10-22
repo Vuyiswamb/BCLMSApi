@@ -238,6 +238,9 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
                     EventEndDate = HasColumn(reader, "EventEndDate") && !reader.IsDBNull(reader.GetOrdinal("EventEndDate")) ? reader.GetDateTime(reader.GetOrdinal("EventEndDate")) : null,
                     FoodVendingDetails = HasColumn(reader, "FoodVendingDetailsJson") && !reader.IsDBNull(reader.GetOrdinal("FoodVendingDetailsJson")) ? System.Text.Json.JsonSerializer.Deserialize<FoodVendingDetails>(reader.GetString(reader.GetOrdinal("FoodVendingDetailsJson"))) : null,
                     TradeStandBusinessType = HasColumn(reader, "TradeStandBusinessType") && !reader.IsDBNull(reader.GetOrdinal("TradeStandBusinessType")) ? reader.GetString(reader.GetOrdinal("TradeStandBusinessType")) : null,
+                    PerishableGoodsType = HasColumn(reader, "PerishableGoodsType") && !reader.IsDBNull(reader.GetOrdinal("PerishableGoodsType")) ? reader.GetString(reader.GetOrdinal("PerishableGoodsType")) : null,
+                    PrePackedPerishableGoods = HasColumn(reader, "PrePackedPerishableGoods") && !reader.IsDBNull(reader.GetOrdinal("PrePackedPerishableGoods")) ? reader.GetString(reader.GetOrdinal("PrePackedPerishableGoods")) : null,
+                    NonPerishableGoodsType = HasColumn(reader, "NonPerishableGoodsType") && !reader.IsDBNull(reader.GetOrdinal("NonPerishableGoodsType")) ? reader.GetString(reader.GetOrdinal("NonPerishableGoodsType")) : null,
                     CurrentStage = reader.GetString(reader.GetOrdinal("CurrentStage")),
                     Status = reader.GetString(reader.GetOrdinal("Status")),
                     SubmittedDate = reader.GetDateTime(reader.GetOrdinal("SubmittedDate")),
@@ -290,6 +293,9 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
                 EventEndDate = HasColumn(reader, "EventEndDate") && !reader.IsDBNull(reader.GetOrdinal("EventEndDate")) ? reader.GetDateTime(reader.GetOrdinal("EventEndDate")) : null,
                 FoodVendingDetails = HasColumn(reader, "FoodVendingDetailsJson") && !reader.IsDBNull(reader.GetOrdinal("FoodVendingDetailsJson")) ? System.Text.Json.JsonSerializer.Deserialize<FoodVendingDetails>(reader.GetString(reader.GetOrdinal("FoodVendingDetailsJson"))) : null,
                 TradeStandBusinessType = HasColumn(reader, "TradeStandBusinessType") && !reader.IsDBNull(reader.GetOrdinal("TradeStandBusinessType")) ? reader.GetString(reader.GetOrdinal("TradeStandBusinessType")) : null,
+                PerishableGoodsType = HasColumn(reader, "PerishableGoodsType") && !reader.IsDBNull(reader.GetOrdinal("PerishableGoodsType")) ? reader.GetString(reader.GetOrdinal("PerishableGoodsType")) : null,
+                PrePackedPerishableGoods = HasColumn(reader, "PrePackedPerishableGoods") && !reader.IsDBNull(reader.GetOrdinal("PrePackedPerishableGoods")) ? reader.GetString(reader.GetOrdinal("PrePackedPerishableGoods")) : null,
+                NonPerishableGoodsType = HasColumn(reader, "NonPerishableGoodsType") && !reader.IsDBNull(reader.GetOrdinal("NonPerishableGoodsType")) ? reader.GetString(reader.GetOrdinal("NonPerishableGoodsType")) : null,
                 ApplicationFee = HasColumn(reader, "ApplicationFee") && !reader.IsDBNull(reader.GetOrdinal("ApplicationFee")) ? reader.GetDecimal(reader.GetOrdinal("ApplicationFee")) : null,
                 WardNumber = reader.IsDBNull(reader.GetOrdinal("WardNumber")) ? null : reader.GetString(reader.GetOrdinal("WardNumber")),
                 RegionName = HasColumn(reader, "RegionName") && !reader.IsDBNull(reader.GetOrdinal("RegionName")) ? reader.GetString(reader.GetOrdinal("RegionName")) : null,
@@ -373,6 +379,161 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
             }
 
             throw CreateDatabaseException("archive application", ex);
+        }
+    }
+
+    public async Task<List<ManagedUserResponse>> GetComplianceOfficersAsync()
+    {
+        try
+        {
+            var users = new List<ManagedUserResponse>();
+            await using var command = datalayer.CreateTextCommand("""
+                SELECT users.UserId, users.Username, users.DisplayName, users.EmailAddress, users.IsActive,
+                       users.HasAllRegions, STRING_AGG(groups.GroupName, ',') AS GroupNames
+                FROM dbo.Users users
+                INNER JOIN dbo.UserGroups userGroups ON userGroups.UserId = users.UserId
+                INNER JOIN dbo.Groups groups ON groups.GroupId = userGroups.GroupId
+                WHERE users.IsActive = 1
+                  AND groups.IsActive = 1
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM dbo.UserGroups customerGroups
+                      INNER JOIN dbo.Groups customerGroup ON customerGroup.GroupId = customerGroups.GroupId
+                      WHERE customerGroups.UserId = users.UserId
+                        AND customerGroup.IsActive = 1
+                        AND customerGroup.GroupName = 'Customer'
+                  )
+                GROUP BY users.UserId, users.Username, users.DisplayName, users.EmailAddress, users.IsActive, users.HasAllRegions
+                ORDER BY users.DisplayName;
+                """);
+
+            await command.Connection!.OpenAsync();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                users.Add(new ManagedUserResponse
+                {
+                    UserId = reader.GetInt32(reader.GetOrdinal("UserId")),
+                    Username = reader.GetString(reader.GetOrdinal("Username")),
+                    DisplayName = reader.GetString(reader.GetOrdinal("DisplayName")),
+                    EmailAddress = reader.IsDBNull(reader.GetOrdinal("EmailAddress")) ? null : reader.GetString(reader.GetOrdinal("EmailAddress")),
+                    IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
+                    HasAllRegions = reader.GetBoolean(reader.GetOrdinal("HasAllRegions")),
+                    Groups = reader.GetString(reader.GetOrdinal("GroupNames")).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList()
+                });
+            }
+
+            return users;
+        }
+        catch (SqlException ex)
+        {
+            throw CreateDatabaseException("load assignable officials", ex);
+        }
+    }
+
+    public async Task<List<ApplicationComplianceOfficerAssignmentResponse>> GetApplicationComplianceOfficerAssignmentsAsync(int applicationId)
+    {
+        try
+        {
+            var assignments = new List<ApplicationComplianceOfficerAssignmentResponse>();
+            await using var command = datalayer.CreateTextCommand("""
+                SELECT assignments.AssignmentId, assignments.ApplicationId, assignments.ComplianceOfficerUserId,
+                       officer.DisplayName AS ComplianceOfficerDisplayName, assignments.ProcessStepName,
+                       assignedBy.DisplayName AS AssignedByDisplayName, assignments.AssignedDateUtc
+                FROM dbo.ApplicationComplianceOfficerAssignments assignments
+                INNER JOIN dbo.Users officer ON officer.UserId = assignments.ComplianceOfficerUserId
+                LEFT JOIN dbo.Users assignedBy ON assignedBy.UserId = assignments.AssignedByUserId
+                WHERE assignments.ApplicationId = @ApplicationId
+                ORDER BY assignments.ProcessStepName, officer.DisplayName;
+                """);
+            command.Parameters.AddWithValue("@ApplicationId", applicationId);
+
+            await command.Connection!.OpenAsync();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                assignments.Add(new ApplicationComplianceOfficerAssignmentResponse
+                {
+                    AssignmentId = reader.GetInt32(reader.GetOrdinal("AssignmentId")),
+                    ApplicationId = reader.GetInt32(reader.GetOrdinal("ApplicationId")),
+                    ComplianceOfficerUserId = reader.GetInt32(reader.GetOrdinal("ComplianceOfficerUserId")),
+                    ComplianceOfficerDisplayName = reader.GetString(reader.GetOrdinal("ComplianceOfficerDisplayName")),
+                    ProcessStepName = reader.GetString(reader.GetOrdinal("ProcessStepName")),
+                    AssignedByDisplayName = reader.IsDBNull(reader.GetOrdinal("AssignedByDisplayName")) ? null : reader.GetString(reader.GetOrdinal("AssignedByDisplayName")),
+                    AssignedDateUtc = reader.IsDBNull(reader.GetOrdinal("AssignedDateUtc")) ? null : reader.GetDateTime(reader.GetOrdinal("AssignedDateUtc"))
+                });
+            }
+
+            return assignments;
+        }
+        catch (SqlException ex)
+        {
+            throw CreateDatabaseException("load application Compliance Officer assignments", ex);
+        }
+    }
+
+    public async Task<ApplicationComplianceOfficerAssignmentResponse> SaveApplicationComplianceOfficerAssignmentAsync(int applicationId, int complianceOfficerUserId, string processStepName, int assignedByUserId)
+    {
+        try
+        {
+            await using var command = datalayer.CreateTextCommand("""
+                MERGE dbo.ApplicationComplianceOfficerAssignments AS target
+                USING (SELECT @ApplicationId AS ApplicationId, @ComplianceOfficerUserId AS ComplianceOfficerUserId, @ProcessStepName AS ProcessStepName) AS source
+                ON target.ApplicationId = source.ApplicationId
+                   AND target.ComplianceOfficerUserId = source.ComplianceOfficerUserId
+                   AND target.ProcessStepName = source.ProcessStepName
+                WHEN MATCHED THEN UPDATE SET AssignedByUserId = @AssignedByUserId, AssignedDateUtc = SYSUTCDATETIME()
+                WHEN NOT MATCHED THEN INSERT (ApplicationId, ComplianceOfficerUserId, ProcessStepName, AssignedByUserId)
+                    VALUES (source.ApplicationId, source.ComplianceOfficerUserId, source.ProcessStepName, @AssignedByUserId);
+
+                SELECT TOP (1) assignments.AssignmentId, assignments.ApplicationId, assignments.ComplianceOfficerUserId,
+                       officer.DisplayName AS ComplianceOfficerDisplayName, assignments.ProcessStepName,
+                       assignedBy.DisplayName AS AssignedByDisplayName, assignments.AssignedDateUtc
+                FROM dbo.ApplicationComplianceOfficerAssignments assignments
+                INNER JOIN dbo.Users officer ON officer.UserId = assignments.ComplianceOfficerUserId
+                LEFT JOIN dbo.Users assignedBy ON assignedBy.UserId = assignments.AssignedByUserId
+                WHERE assignments.ApplicationId = @ApplicationId
+                  AND assignments.ComplianceOfficerUserId = @ComplianceOfficerUserId
+                  AND assignments.ProcessStepName = @ProcessStepName;
+                """);
+            command.Parameters.AddWithValue("@ApplicationId", applicationId);
+            command.Parameters.AddWithValue("@ComplianceOfficerUserId", complianceOfficerUserId);
+            command.Parameters.AddWithValue("@ProcessStepName", processStepName);
+            command.Parameters.AddWithValue("@AssignedByUserId", assignedByUserId);
+
+            await command.Connection!.OpenAsync();
+            await using var reader = await command.ExecuteReaderAsync();
+            if (!await reader.ReadAsync()) throw new InvalidOperationException("The assignment could not be saved.");
+            return new ApplicationComplianceOfficerAssignmentResponse
+            {
+                AssignmentId = reader.GetInt32(reader.GetOrdinal("AssignmentId")),
+                ApplicationId = reader.GetInt32(reader.GetOrdinal("ApplicationId")),
+                ComplianceOfficerUserId = reader.GetInt32(reader.GetOrdinal("ComplianceOfficerUserId")),
+                ComplianceOfficerDisplayName = reader.GetString(reader.GetOrdinal("ComplianceOfficerDisplayName")),
+                ProcessStepName = reader.GetString(reader.GetOrdinal("ProcessStepName")),
+                AssignedByDisplayName = reader.IsDBNull(reader.GetOrdinal("AssignedByDisplayName")) ? null : reader.GetString(reader.GetOrdinal("AssignedByDisplayName")),
+                AssignedDateUtc = reader.IsDBNull(reader.GetOrdinal("AssignedDateUtc")) ? null : reader.GetDateTime(reader.GetOrdinal("AssignedDateUtc"))
+            };
+        }
+        catch (SqlException ex)
+        {
+            throw CreateDatabaseException("save application Compliance Officer assignment", ex);
+        }
+    }
+
+    public async Task<bool> RemoveApplicationComplianceOfficerAssignmentAsync(int applicationId, int assignmentId)
+    {
+        try
+        {
+            await using var command = datalayer.CreateTextCommand("DELETE FROM dbo.ApplicationComplianceOfficerAssignments WHERE ApplicationId = @ApplicationId AND AssignmentId = @AssignmentId;");
+            command.Parameters.AddWithValue("@ApplicationId", applicationId);
+            command.Parameters.AddWithValue("@AssignmentId", assignmentId);
+            await command.Connection!.OpenAsync();
+            return await command.ExecuteNonQueryAsync() > 0;
+        }
+        catch (SqlException ex)
+        {
+            throw CreateDatabaseException("remove application Compliance Officer assignment", ex);
         }
     }
 
@@ -543,8 +704,10 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
                 }
                 response = MapApplicationResponse(reader);
             }
-            await SavePrePackedPerishableGoodsAsync(response.ApplicationId, request.PrePackedPerishableGoods);
+            await SaveApplicationGoodsAsync(response.ApplicationId, request);
+            response.PerishableGoodsType = request.PerishableGoodsType;
             response.PrePackedPerishableGoods = request.PrePackedPerishableGoods;
+            response.NonPerishableGoodsType = request.NonPerishableGoodsType;
             return response;
         }
         catch (DuplicateApplicationException)
@@ -557,11 +720,19 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
         }
     }
 
-    private async Task SavePrePackedPerishableGoodsAsync(int applicationId, string? selections)
+    private async Task SaveApplicationGoodsAsync(int applicationId, ApplicationSubmitRequest request)
     {
-        await using var command = datalayer.CreateTextCommand("UPDATE dbo.Applications SET PrePackedPerishableGoods = @Selections WHERE ApplicationId = @ApplicationId;");
+        await using var command = datalayer.CreateTextCommand("""
+            UPDATE dbo.Applications
+            SET PerishableGoodsType = @PerishableGoods,
+                PrePackedPerishableGoods = @PrePackedGoods,
+                NonPerishableGoodsType = @NonPerishableGoods
+            WHERE ApplicationId = @ApplicationId;
+            """);
         command.Parameters.AddWithValue("@ApplicationId", applicationId);
-        command.Parameters.AddWithValue("@Selections", string.IsNullOrWhiteSpace(selections) ? DBNull.Value : selections.Trim());
+        command.Parameters.AddWithValue("@PerishableGoods", string.IsNullOrWhiteSpace(request.PerishableGoodsType) ? DBNull.Value : request.PerishableGoodsType.Trim());
+        command.Parameters.AddWithValue("@PrePackedGoods", string.IsNullOrWhiteSpace(request.PrePackedPerishableGoods) ? DBNull.Value : request.PrePackedPerishableGoods.Trim());
+        command.Parameters.AddWithValue("@NonPerishableGoods", string.IsNullOrWhiteSpace(request.NonPerishableGoodsType) ? DBNull.Value : request.NonPerishableGoodsType.Trim());
         await command.Connection!.OpenAsync();
         await command.ExecuteNonQueryAsync();
     }
@@ -589,7 +760,9 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
 
             await command.Connection!.OpenAsync();
             await using var reader = await command.ExecuteReaderAsync();
-            return await reader.ReadAsync() ? MapApplicationResponse(reader) : null;
+            var response = await reader.ReadAsync() ? MapApplicationResponse(reader) : null;
+            if (response is not null) await SaveApplicationGoodsAsync(response.ApplicationId, request);
+            return response;
         }
         catch (SqlException ex)
         {
@@ -961,6 +1134,9 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
             EventEndDate = HasColumn(reader, "EventEndDate") && !reader.IsDBNull(reader.GetOrdinal("EventEndDate")) ? reader.GetDateTime(reader.GetOrdinal("EventEndDate")) : null,
             FoodVendingDetails = HasColumn(reader, "FoodVendingDetailsJson") && !reader.IsDBNull(reader.GetOrdinal("FoodVendingDetailsJson")) ? System.Text.Json.JsonSerializer.Deserialize<FoodVendingDetails>(reader.GetString(reader.GetOrdinal("FoodVendingDetailsJson"))) : null,
             TradeStandBusinessType = HasColumn(reader, "TradeStandBusinessType") && !reader.IsDBNull(reader.GetOrdinal("TradeStandBusinessType")) ? reader.GetString(reader.GetOrdinal("TradeStandBusinessType")) : null,
+            PerishableGoodsType = HasColumn(reader, "PerishableGoodsType") && !reader.IsDBNull(reader.GetOrdinal("PerishableGoodsType")) ? reader.GetString(reader.GetOrdinal("PerishableGoodsType")) : null,
+            PrePackedPerishableGoods = HasColumn(reader, "PrePackedPerishableGoods") && !reader.IsDBNull(reader.GetOrdinal("PrePackedPerishableGoods")) ? reader.GetString(reader.GetOrdinal("PrePackedPerishableGoods")) : null,
+            NonPerishableGoodsType = HasColumn(reader, "NonPerishableGoodsType") && !reader.IsDBNull(reader.GetOrdinal("NonPerishableGoodsType")) ? reader.GetString(reader.GetOrdinal("NonPerishableGoodsType")) : null,
             CurrentStage = reader.GetString(reader.GetOrdinal("CurrentStage")),
             Status = reader.GetString(reader.GetOrdinal("Status")),
             SubmittedDate = reader.GetDateTime(reader.GetOrdinal("SubmittedDate")),

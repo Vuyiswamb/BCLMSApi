@@ -28,7 +28,11 @@ public class ApplicationSubmitRequest
 
     public string? TradeStandBusinessType { get; set; }
 
+    public string? PerishableGoodsType { get; set; }
+
     public string? PrePackedPerishableGoods { get; set; }
+
+    public string? NonPerishableGoodsType { get; set; }
 
     public decimal? ApplicationFee { get; set; }
 

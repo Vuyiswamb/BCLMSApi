@@ -22,7 +22,11 @@ public class ApplicationSubmitResponse
 
     public string? TradeStandBusinessType { get; set; }
 
+    public string? PerishableGoodsType { get; set; }
+
     public string? PrePackedPerishableGoods { get; set; }
+
+    public string? NonPerishableGoodsType { get; set; }
 
     public string CurrentStage { get; set; } = string.Empty;
 

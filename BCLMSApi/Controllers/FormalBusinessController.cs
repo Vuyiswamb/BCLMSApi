@@ -495,6 +495,98 @@ public class FormalBusinessController(IFormalBusinessService formalBusinessServi
             : Ok(application);
     }
 
+    [HttpGet("officials")]
+    [HttpGet("compliance-officers")]
+    public async Task<ActionResult<List<ManagedUserResponse>>> GetComplianceOfficers()
+    {
+        var user = userTokenService.GetValidTokenPayload(Request.Headers.Authorization);
+        if (user is null || user.IsCustomer)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Internal official access is required." });
+        }
+
+        return Ok(await formalBusinessService.GetComplianceOfficersAsync(user));
+    }
+
+    [HttpGet("applications/internal/{applicationId:int}/compliance-officer-assignments")]
+    public async Task<ActionResult<List<ApplicationComplianceOfficerAssignmentResponse>>> GetComplianceOfficerAssignments(int applicationId)
+    {
+        var user = userTokenService.GetValidTokenPayload(Request.Headers.Authorization);
+        if (user is null || user.IsCustomer)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Internal official access is required." });
+        }
+
+        try
+        {
+            return Ok(await formalBusinessService.GetApplicationComplianceOfficerAssignmentsAsync(applicationId, user));
+        }
+        catch (KeyNotFoundException error)
+        {
+            return NotFound(new { message = error.Message });
+        }
+        catch (UnauthorizedAccessException error)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = error.Message });
+        }
+    }
+
+    [HttpPost("applications/internal/{applicationId:int}/compliance-officer-assignments")]
+    public async Task<ActionResult<ApplicationComplianceOfficerAssignmentResponse>> AssignComplianceOfficer(int applicationId, ApplicationComplianceOfficerAssignmentRequest request)
+    {
+        var user = userTokenService.GetValidTokenPayload(Request.Headers.Authorization);
+        if (user is null || user.IsCustomer)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Internal official access is required." });
+        }
+
+        try
+        {
+            return Ok(await formalBusinessService.SaveApplicationComplianceOfficerAssignmentAsync(applicationId, request, user));
+        }
+        catch (ArgumentException error)
+        {
+            return BadRequest(new { message = error.Message });
+        }
+        catch (KeyNotFoundException error)
+        {
+            return NotFound(new { message = error.Message });
+        }
+        catch (UnauthorizedAccessException error)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = error.Message });
+        }
+    }
+
+    [HttpDelete("applications/internal/{applicationId:int}/compliance-officer-assignments/{assignmentId:int}")]
+    public async Task<ActionResult> RemoveComplianceOfficerAssignment(int applicationId, int assignmentId)
+    {
+        var user = userTokenService.GetValidTokenPayload(Request.Headers.Authorization);
+        if (user is null || user.IsCustomer)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Internal official access is required." });
+        }
+
+        try
+        {
+            return await formalBusinessService.RemoveApplicationComplianceOfficerAssignmentAsync(applicationId, assignmentId, user)
+                ? NoContent()
+                : NotFound(new { message = "Assignment not found." });
+        }
+        catch (ArgumentException error)
+        {
+            return BadRequest(new { message = error.Message });
+        }
+        catch (KeyNotFoundException error)
+        {
+            return NotFound(new { message = error.Message });
+        }
+        catch (UnauthorizedAccessException error)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = error.Message });
+        }
+    }
+
     [HttpGet("applications/internal/{applicationId:int}/documents/{applicationDocumentId:int}/file")]
     public async Task<ActionResult> GetApplicationDocumentFile(int applicationId, int applicationDocumentId)
     {

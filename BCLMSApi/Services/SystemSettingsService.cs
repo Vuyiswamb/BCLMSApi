@@ -57,7 +57,7 @@ public class SystemSettingsService(Datalayer datalayer, IConfiguration configura
         var protectedValue = await GetSettingAsync(EmailPasswordKey);
         if (string.IsNullOrWhiteSpace(protectedValue))
         {
-            return null;
+            return configuration["Email:Office365:Password"];
         }
 
         return Unprotect(protectedValue);

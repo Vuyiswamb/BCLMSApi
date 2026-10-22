@@ -13,7 +13,7 @@ namespace BCLMSApi.Controllers;
 [Route("api/PermitVerification")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public class PermitVerificationController(PermitVerificationRepository permitRepository, IFormalBusinessRepository repository,
-    IFormalBusinessService applicationService, IUserTokenService tokens, IConfiguration configuration) : ControllerBase
+    IFormalBusinessService applicationService, InvoiceRepository invoiceRepository, IUserTokenService tokens, IConfiguration configuration) : ControllerBase
 {
     private static (DateTime? Start, DateTime? End) ValidityDates(InternalApplicationDetailResponse application)
     {
@@ -54,10 +54,12 @@ public class PermitVerificationController(PermitVerificationRepository permitRep
             : issued is null || expires is null ? "Unable to confirm validity"
             : today < issued ? "Not yet valid" : today > expires ? "Expired" : "Valid";
         var stalls = (await permitRepository.GetStallsAsync(application.TrackingNumber)).Select(x => new { stallNumber=x.StallNumber,stallName=x.StallName,address=x.Address,latitude=x.Latitude,longitude=x.Longitude }).ToList();
+        var invoice = await invoiceRepository.GetAsync(application.ApplicationId);
         return Ok(new { permitNumber = application.TrackingNumber, holderName = application.ApplicantName,
             businessName = application.BusinessName, licenceType = application.LicenceType, status, isValid = status == "Valid", validFrom = issued,
             validUntil = expires, address = application.PhysicalAddress, latitude = application.Latitude,
-            longitude = application.Longitude, stalls, photoAvailable = await ReadPhoto(application.ApplicationId, includeContent: false) is not null });
+            longitude = application.Longitude, stalls, paymentStatus = invoice?.PaymentStatus ?? "Unavailable",
+            photoAvailable = await ReadPhoto(application.ApplicationId, includeContent: false) is not null });
     }
 
     [AllowAnonymous]

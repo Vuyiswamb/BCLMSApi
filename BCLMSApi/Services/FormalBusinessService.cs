@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Razor.TagHelpers;
 
 namespace BCLMSApi.Services;
 
-public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepository, Datalayer datalayer, IEmailService emailService, IHanisVerificationService hanisVerification) : IFormalBusinessService
+public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepository, ApplicationLookupRepository lookupRepository, Datalayer datalayer, IEmailService emailService, IHanisVerificationService hanisVerification) : IFormalBusinessService
 {
     private const long MaxPdfBytes = 10 * 1024 * 1024;
     private static readonly byte[] PdfHeader = "%PDF"u8.ToArray();
@@ -148,6 +148,66 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
         }
 
         return application;
+    }
+
+    public async Task<List<ManagedUserResponse>> GetComplianceOfficersAsync(UserTokenPayload user)
+    {
+        EnsureInternalUser(user);
+        return await formalBusinessRepository.GetComplianceOfficersAsync();
+    }
+
+    public async Task<List<ApplicationComplianceOfficerAssignmentResponse>> GetApplicationComplianceOfficerAssignmentsAsync(int applicationId, UserTokenPayload user)
+    {
+        await EnsureAssignableApplicationAsync(applicationId, user);
+        return await formalBusinessRepository.GetApplicationComplianceOfficerAssignmentsAsync(applicationId);
+    }
+
+    public async Task<ApplicationComplianceOfficerAssignmentResponse> SaveApplicationComplianceOfficerAssignmentAsync(int applicationId, ApplicationComplianceOfficerAssignmentRequest request, UserTokenPayload user)
+    {
+        var application = await EnsureAssignableApplicationAsync(applicationId, user);
+        if (request.ComplianceOfficerUserId <= 0)
+        {
+            throw new ArgumentException("Select a valid official.");
+        }
+
+        var processStepName = request.ProcessStepName?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(processStepName))
+        {
+            throw new ArgumentException("Select the process part for the assignment.");
+        }
+
+        var step = application.WorkflowSteps.FirstOrDefault(item => item.StepName.Equals(processStepName, StringComparison.OrdinalIgnoreCase));
+        if (step is null)
+        {
+            throw new ArgumentException("Select a process part from this application’s workflow.");
+        }
+
+        var officers = await formalBusinessRepository.GetComplianceOfficersAsync();
+        if (officers.All(officer => officer.UserId != request.ComplianceOfficerUserId || !officer.IsActive))
+        {
+            throw new ArgumentException("The selected official is not active.");
+        }
+
+        return await formalBusinessRepository.SaveApplicationComplianceOfficerAssignmentAsync(applicationId, request.ComplianceOfficerUserId, step.StepName, user.UserId);
+    }
+
+    public async Task<bool> RemoveApplicationComplianceOfficerAssignmentAsync(int applicationId, int assignmentId, UserTokenPayload user)
+    {
+        await EnsureAssignableApplicationAsync(applicationId, user);
+        if (assignmentId <= 0) throw new ArgumentException("Select a valid assignment.");
+        return await formalBusinessRepository.RemoveApplicationComplianceOfficerAssignmentAsync(applicationId, assignmentId);
+    }
+
+    private async Task<InternalApplicationDetailResponse> EnsureAssignableApplicationAsync(int applicationId, UserTokenPayload user)
+    {
+        EnsureInternalUser(user);
+        var application = await GetInternalApplicationDetailAsync(applicationId, user);
+        return application ?? throw new KeyNotFoundException("Application not found.");
+    }
+
+    private static void EnsureInternalUser(UserTokenPayload user)
+    {
+        if (user.IsCustomer) throw new UnauthorizedAccessException("Internal official access is required.");
     }
 
     public async Task<ApplicationDocumentFileResponse?> GetApplicationDocumentFileAsync(int applicationId, int applicationDocumentId, UserTokenPayload user)
@@ -311,7 +371,7 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
             }
 
             await PrepareFoodVendingAsync(request, licenceType);
-            ValidateTradingBusinessType(licenceType, request.TradeStandBusinessType);
+            await ValidateTradingBusinessTypeAsync(licenceType, request.TradeStandBusinessType);
 
             return await formalBusinessRepository.SubmitApplicationAsync(request, licenceType, userId);
 
@@ -384,7 +444,7 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
         }
 
         await PrepareFoodVendingAsync(request, licenceType);
-            ValidateTradingBusinessType(licenceType, request.TradeStandBusinessType);
+            await ValidateTradingBusinessTypeAsync(licenceType, request.TradeStandBusinessType);
 
         return await formalBusinessRepository.ResubmitRejectedApplicationAsync(applicationId, request, licenceType, userId);
     }
@@ -469,7 +529,24 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
         var currentStep = currentApplication.WorkflowSteps.OrderBy(step => step.SequenceNumber)
             .FirstOrDefault(step => !IsCompletedWorkflowStatus(step.Status))
             ?? throw new ArgumentException("There is no active workflow step to process.");
-        if (!user.IsSuperUser && !user.Groups.Contains(currentStep.GroupName, StringComparer.OrdinalIgnoreCase))
+
+        // An explicit application assignment takes precedence over the normal
+        // workflow-group permission. While an assignment exists for this step,
+        // only the assigned official may approve, reject, or complete it.
+        var stepAssignments = (await formalBusinessRepository.GetApplicationComplianceOfficerAssignmentsAsync(applicationId))
+            .Where(assignment => assignment.ProcessStepName.Equals(currentStep.StepName, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (stepAssignments.Count > 0 && stepAssignments.All(assignment => assignment.ComplianceOfficerUserId != user.UserId))
+        {
+            var assignedOfficials = string.Join(", ", stepAssignments
+                .Select(assignment => assignment.ComplianceOfficerDisplayName)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase));
+            throw new UnauthorizedAccessException(
+                $"Only {assignedOfficials} may approve, reject, or complete this application step.");
+        }
+
+        if (stepAssignments.Count == 0 && !user.IsSuperUser && !user.Groups.Contains(currentStep.GroupName, StringComparer.OrdinalIgnoreCase))
             throw new UnauthorizedAccessException("You are not assigned to process this workflow step.");
         if (!new[] { "Pending", "In progress", "Submitted", "Under Review" }.Contains(currentStep.Status, StringComparer.OrdinalIgnoreCase)
             || new[] { "Rejected", "Cancelled", "Completed", "Archived" }.Contains(currentApplication.Status, StringComparer.OrdinalIgnoreCase))
@@ -1139,19 +1216,17 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
 
     private sealed class FoodMapPoint { public double Latitude { get; set; } public double Longitude { get; set; } }
 
-    private static void ValidateTradingBusinessType(string licenceType, string? businessType)
+    private async Task ValidateTradingBusinessTypeAsync(string licenceType, string? businessType)
     {
         if (!RequiresTradingBusinessType(licenceType))
         {
             return;
         }
 
-        var allowedBusinessTypes = new[]
-        {
-            "None -perishable Goods",
-            "Perishable Goods",
-            "Cell phone Accessories & Airtime Business"
-        };
+        var configured = await lookupRepository.GetAsync("BusinessType");
+        var allowedBusinessTypes = configured.Count > 0
+            ? configured.Select(item => item.LookupValue).ToArray()
+            : new[] { "None -perishable Goods", "Perishable Goods", "Cell phone Accessories & Airtime Business", "Photographer" };
 
         if (string.IsNullOrWhiteSpace(businessType)
             || !allowedBusinessTypes.Contains(businessType.Trim(), StringComparer.OrdinalIgnoreCase))

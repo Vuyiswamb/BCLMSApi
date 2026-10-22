@@ -20,6 +20,12 @@ public class InternalApplicationSummaryResponse
 
     public string? TradeStandBusinessType { get; set; }
 
+    public string? PerishableGoodsType { get; set; }
+
+    public string? PrePackedPerishableGoods { get; set; }
+
+    public string? NonPerishableGoodsType { get; set; }
+
     public string CurrentStage { get; set; } = string.Empty;
 
     public string Status { get; set; } = string.Empty;
@@ -79,6 +85,23 @@ public class InternalApplicationDetailResponse : InternalApplicationSummaryRespo
     public List<InternalApplicationWorkflowStepResponse> WorkflowSteps { get; set; } = [];
 
     public List<InternalApplicationAttachmentResponse> Attachments { get; set; } = [];
+}
+
+public class ApplicationComplianceOfficerAssignmentResponse
+{
+    public int AssignmentId { get; set; }
+    public int ApplicationId { get; set; }
+    public int ComplianceOfficerUserId { get; set; }
+    public string ComplianceOfficerDisplayName { get; set; } = string.Empty;
+    public string ProcessStepName { get; set; } = string.Empty;
+    public string? AssignedByDisplayName { get; set; }
+    public DateTime? AssignedDateUtc { get; set; }
+}
+
+public class ApplicationComplianceOfficerAssignmentRequest
+{
+    public int ComplianceOfficerUserId { get; set; }
+    public string ProcessStepName { get; set; } = string.Empty;
 }
 
 public class InternalApplicationWorkflowStepResponse
