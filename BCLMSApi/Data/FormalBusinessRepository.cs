@@ -722,19 +722,26 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
 
     private async Task SaveApplicationGoodsAsync(int applicationId, ApplicationSubmitRequest request)
     {
-        await using var command = datalayer.CreateTextCommand("""
-            UPDATE dbo.Applications
-            SET PerishableGoodsType = @PerishableGoods,
-                PrePackedPerishableGoods = @PrePackedGoods,
-                NonPerishableGoodsType = @NonPerishableGoods
-            WHERE ApplicationId = @ApplicationId;
-            """);
-        command.Parameters.AddWithValue("@ApplicationId", applicationId);
-        command.Parameters.AddWithValue("@PerishableGoods", string.IsNullOrWhiteSpace(request.PerishableGoodsType) ? DBNull.Value : request.PerishableGoodsType.Trim());
-        command.Parameters.AddWithValue("@PrePackedGoods", string.IsNullOrWhiteSpace(request.PrePackedPerishableGoods) ? DBNull.Value : request.PrePackedPerishableGoods.Trim());
-        command.Parameters.AddWithValue("@NonPerishableGoods", string.IsNullOrWhiteSpace(request.NonPerishableGoodsType) ? DBNull.Value : request.NonPerishableGoodsType.Trim());
-        await command.Connection!.OpenAsync();
-        await command.ExecuteNonQueryAsync();
+        try
+        {
+            await using var command = datalayer.CreateTextCommand("""
+                UPDATE dbo.Applications
+                SET PerishableGoodsType = @PerishableGoods,
+                    PrePackedPerishableGoods = @PrePackedGoods,
+                    NonPerishableGoodsType = @NonPerishableGoods
+                WHERE ApplicationId = @ApplicationId;
+                """);
+            command.Parameters.AddWithValue("@ApplicationId", applicationId);
+            command.Parameters.AddWithValue("@PerishableGoods", string.IsNullOrWhiteSpace(request.PerishableGoodsType) ? DBNull.Value : request.PerishableGoodsType.Trim());
+            command.Parameters.AddWithValue("@PrePackedGoods", string.IsNullOrWhiteSpace(request.PrePackedPerishableGoods) ? DBNull.Value : request.PrePackedPerishableGoods.Trim());
+            command.Parameters.AddWithValue("@NonPerishableGoods", string.IsNullOrWhiteSpace(request.NonPerishableGoodsType) ? DBNull.Value : request.NonPerishableGoodsType.Trim());
+            await command.Connection!.OpenAsync();
+            await command.ExecuteNonQueryAsync();
+        }
+        catch (SqlException ex)
+        {
+            throw CreateDatabaseException("save application goods", ex);
+        }
     }
 
     public async Task<ApplicationSubmitResponse?> ResubmitRejectedApplicationAsync(int applicationId, ApplicationSubmitRequest request, string licenceType, int userId)
