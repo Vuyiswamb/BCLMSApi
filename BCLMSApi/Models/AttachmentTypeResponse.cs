@@ -10,6 +10,8 @@ public class AttachmentTypeResponse
 
     public bool IsRequired { get; set; }
 
+    public List<string> LicenceTypes { get; set; } = [];
+
     public long MaxFileSizeBytes { get; set; }
 
     public string AllowedExtension { get; set; } = ".pdf";

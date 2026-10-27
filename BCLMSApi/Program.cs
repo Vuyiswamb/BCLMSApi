@@ -29,6 +29,7 @@ builder.Services.AddScoped<StallsRepository>();
 builder.Services.AddScoped<PermitVerificationRepository>();
 builder.Services.AddScoped<AssistedIntakeRepository>();
 builder.Services.AddScoped<WorkflowTemplateRepository>();
+builder.Services.AddScoped<AttachmentTypeRepository>();
 builder.Services.AddScoped<WorkshopRepository>();
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
 builder.Services.AddScoped<IFormalBusinessRepository, FormalBusinessRepository>();
