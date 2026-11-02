@@ -69,7 +69,8 @@ public sealed class WorkflowTemplateRepository(Datalayer datalayer)
                 AssignedGroupName = step.AssignedGroupName.Trim(),
                 SequenceNumber = index + 1,
                 InitialStatus = string.IsNullOrWhiteSpace(step.InitialStatus) ? "Pending" : step.InitialStatus.Trim(),
-                step.IsRequired
+                step.IsRequired,
+                step.RequiresSignature
             }));
 
         await command.Connection!.OpenAsync();
@@ -97,6 +98,7 @@ public sealed class WorkflowTemplateRepository(Datalayer datalayer)
         AssignedGroupName = reader.GetString(reader.GetOrdinal("AssignedGroupName")),
         SequenceNumber = reader.GetInt32(reader.GetOrdinal("SequenceNumber")),
         InitialStatus = reader.GetString(reader.GetOrdinal("InitialStatus")),
-        IsRequired = reader.GetBoolean(reader.GetOrdinal("IsRequired"))
+        IsRequired = reader.GetBoolean(reader.GetOrdinal("IsRequired")),
+        RequiresSignature = reader.GetBoolean(reader.GetOrdinal("RequiresSignature"))
     };
 }

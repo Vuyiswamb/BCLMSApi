@@ -114,6 +114,8 @@ public class InternalApplicationWorkflowStepResponse
 
     public string Status { get; set; } = string.Empty;
 
+    public bool? RequiresSignature { get; set; }
+
     public DateTime? StartedDate { get; set; }
 
     public DateTime? CompletedDate { get; set; }

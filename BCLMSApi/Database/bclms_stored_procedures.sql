@@ -864,7 +864,8 @@ BEGIN
         steps.Remarks,
         steps.ActionedByUserId,
         steps.ActionedByDisplayName,
-        steps.DecisionDate
+        steps.DecisionDate,
+        steps.RequiresSignature
     FROM dbo.ApplicationWorkflowSteps steps
     INNER JOIN dbo.Groups groups ON groups.GroupId = steps.AssignedGroupId
     WHERE steps.ApplicationId = @ApplicationId
@@ -1437,10 +1438,11 @@ BEGIN
     IF @WorkflowTemplateId IS NULL
         SELECT TOP 1 @WorkflowTemplateId = WorkflowTemplateId FROM dbo.WorkflowTemplates WHERE IsActive = 1 AND ApplicationType = 'Hawkers Licence';
 
-    INSERT dbo.ApplicationWorkflowSteps (ApplicationId, StepName, AssignedGroupId, SequenceNumber, Status, StartedDate, CompletedDate)
+    INSERT dbo.ApplicationWorkflowSteps (ApplicationId, StepName, AssignedGroupId, SequenceNumber, Status, StartedDate, CompletedDate, RequiresSignature)
     SELECT @ApplicationId, steps.StepName, steps.AssignedGroupId, steps.SequenceNumber, steps.InitialStatus,
            CASE WHEN steps.InitialStatus = 'Approved' THEN GETDATE() ELSE NULL END,
-           CASE WHEN steps.InitialStatus = 'Approved' THEN GETDATE() ELSE NULL END
+           CASE WHEN steps.InitialStatus = 'Approved' THEN GETDATE() ELSE NULL END,
+           steps.RequiresSignature
     FROM dbo.WorkflowTemplateSteps steps
     WHERE steps.WorkflowTemplateId = @WorkflowTemplateId;
 

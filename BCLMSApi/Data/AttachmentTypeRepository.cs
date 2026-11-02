@@ -8,14 +8,14 @@ public sealed class AttachmentTypeRepository(Datalayer data)
     {
         await using var command = data.CreateTextCommand($"""
             SELECT a.AttachmentTypeId, a.TypeName, a.Description, a.IsRequired,
-                   a.MaxFileSizeBytes, a.AllowedExtension, a.AllowedContentType,
+                   a.MaxFileSizeBytes, a.AllowedExtension, a.AllowedContentType, a.IsActive,
                    STRING_AGG(CASE WHEN m.ApplicationType IS NULL THEN NULL ELSE m.ApplicationType END, '|') AS LicenceTypes
             FROM dbo.AttachmentTypes a
             LEFT JOIN dbo.AttachmentTypeApplicationTypes m ON m.AttachmentTypeId = a.AttachmentTypeId
             WHERE {(activeOnly ? "a.IsActive = 1 AND" : string.Empty)}
                   a.TypeName <> 'Proof of payment'
             GROUP BY a.AttachmentTypeId, a.TypeName, a.Description, a.IsRequired,
-                     a.MaxFileSizeBytes, a.AllowedExtension, a.AllowedContentType
+                     a.MaxFileSizeBytes, a.AllowedExtension, a.AllowedContentType, a.IsActive
             ORDER BY a.TypeName;
             """);
         await command.Connection!.OpenAsync();
@@ -23,13 +23,14 @@ public sealed class AttachmentTypeRepository(Datalayer data)
         var result = new List<AttachmentTypeResponse>();
         while (await reader.ReadAsync())
         {
-            var assignments = reader.IsDBNull(7) ? string.Empty : reader.GetString(7);
+            var assignments = reader.IsDBNull(8) ? string.Empty : reader.GetString(8);
             result.Add(new AttachmentTypeResponse
             {
                 AttachmentTypeId = reader.GetInt32(0),
                 TypeName = reader.GetString(1),
                 Description = reader.IsDBNull(2) ? null : reader.GetString(2),
                 IsRequired = reader.GetBoolean(3),
+                IsActive = reader.GetBoolean(7),
                 MaxFileSizeBytes = reader.GetInt64(4),
                 AllowedExtension = reader.GetString(5),
                 AllowedContentType = reader.GetString(6),

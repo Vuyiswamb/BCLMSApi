@@ -28,12 +28,24 @@ BEGIN
         SequenceNumber INT NOT NULL,
         InitialStatus NVARCHAR(40) NOT NULL CONSTRAINT DF_WorkflowTemplateSteps_InitialStatus DEFAULT ('Pending'),
         IsRequired BIT NOT NULL CONSTRAINT DF_WorkflowTemplateSteps_IsRequired DEFAULT (1),
+        RequiresSignature BIT NOT NULL CONSTRAINT DF_WorkflowTemplateSteps_RequiresSignature DEFAULT (0),
         CreatedDate DATETIME2(0) NOT NULL CONSTRAINT DF_WorkflowTemplateSteps_CreatedDate DEFAULT (SYSUTCDATETIME()),
         CONSTRAINT FK_WorkflowTemplateSteps_Template FOREIGN KEY (WorkflowTemplateId) REFERENCES dbo.WorkflowTemplates(WorkflowTemplateId),
         CONSTRAINT FK_WorkflowTemplateSteps_Group FOREIGN KEY (AssignedGroupId) REFERENCES dbo.Groups(GroupId),
         CONSTRAINT UQ_WorkflowTemplateSteps_Order UNIQUE (WorkflowTemplateId, SequenceNumber)
     );
 END;
+GO
+
+IF COL_LENGTH('dbo.WorkflowTemplateSteps', 'RequiresSignature') IS NULL
+BEGIN
+    ALTER TABLE dbo.WorkflowTemplateSteps ADD RequiresSignature BIT NOT NULL CONSTRAINT DF_WorkflowTemplateSteps_RequiresSignature DEFAULT (0) WITH VALUES;
+END;
+GO
+
+UPDATE dbo.WorkflowTemplateSteps
+SET RequiresSignature = 1
+WHERE LOWER(LTRIM(RTRIM(StepName))) IN ('admin approval', 'admin approval of payment', 'functional head approval', 'director approval');
 GO
 
 IF NOT EXISTS (SELECT 1 FROM dbo.WorkflowTemplates WHERE ApplicationType = 'Formal Business') INSERT dbo.WorkflowTemplates (ApplicationType, TemplateName) VALUES ('Formal Business', 'Formal Business workflow');
@@ -75,7 +87,7 @@ CREATE OR ALTER PROCEDURE dbo.usp_WorkflowTemplates_GetAll
 AS
 BEGIN
     SET NOCOUNT ON;
-    SELECT templates.WorkflowTemplateId, templates.ApplicationType, templates.TemplateName, templates.IsActive, steps.WorkflowTemplateStepId, steps.StepName, groups.GroupName AS AssignedGroupName, steps.SequenceNumber, steps.InitialStatus, steps.IsRequired
+    SELECT templates.WorkflowTemplateId, templates.ApplicationType, templates.TemplateName, templates.IsActive, steps.WorkflowTemplateStepId, steps.StepName, groups.GroupName AS AssignedGroupName, steps.SequenceNumber, steps.InitialStatus, steps.IsRequired, steps.RequiresSignature
     FROM dbo.WorkflowTemplates templates
     LEFT JOIN dbo.WorkflowTemplateSteps steps ON steps.WorkflowTemplateId = templates.WorkflowTemplateId
     LEFT JOIN dbo.Groups groups ON groups.GroupId = steps.AssignedGroupId
@@ -106,9 +118,9 @@ BEGIN
     END
     ELSE UPDATE dbo.WorkflowTemplates SET ApplicationType = LTRIM(RTRIM(@ApplicationType)), TemplateName = LTRIM(RTRIM(@TemplateName)), IsActive = @IsActive, ModifiedDate = SYSUTCDATETIME(), ModifiedByUserId = @UserId WHERE WorkflowTemplateId = @WorkflowTemplateId;
     DELETE FROM dbo.WorkflowTemplateSteps WHERE WorkflowTemplateId = @WorkflowTemplateId;
-    INSERT dbo.WorkflowTemplateSteps (WorkflowTemplateId, StepName, AssignedGroupId, SequenceNumber, InitialStatus, IsRequired)
-    SELECT @WorkflowTemplateId, jsonSteps.StepName, groups.GroupId, jsonSteps.SequenceNumber, jsonSteps.InitialStatus, jsonSteps.IsRequired
-    FROM OPENJSON(@StepsJson) WITH (StepName NVARCHAR(120) '$.StepName', AssignedGroupName NVARCHAR(80) '$.AssignedGroupName', SequenceNumber INT '$.SequenceNumber', InitialStatus NVARCHAR(40) '$.InitialStatus', IsRequired BIT '$.IsRequired') jsonSteps
+    INSERT dbo.WorkflowTemplateSteps (WorkflowTemplateId, StepName, AssignedGroupId, SequenceNumber, InitialStatus, IsRequired, RequiresSignature)
+    SELECT @WorkflowTemplateId, jsonSteps.StepName, groups.GroupId, jsonSteps.SequenceNumber, jsonSteps.InitialStatus, jsonSteps.IsRequired, COALESCE(jsonSteps.RequiresSignature, 0)
+    FROM OPENJSON(@StepsJson) WITH (StepName NVARCHAR(120) '$.StepName', AssignedGroupName NVARCHAR(80) '$.AssignedGroupName', SequenceNumber INT '$.SequenceNumber', InitialStatus NVARCHAR(40) '$.InitialStatus', IsRequired BIT '$.IsRequired', RequiresSignature BIT '$.RequiresSignature') jsonSteps
     INNER JOIN dbo.Groups groups ON groups.GroupName = jsonSteps.AssignedGroupName;
 
     -- Existing applications keep workflow status/audit data, but the template is
@@ -135,14 +147,15 @@ BEGIN
         WHERE ApplicationId = @ApplicationId
           AND SequenceNumber > @CompletedPrefix;
 
-        INSERT dbo.ApplicationWorkflowSteps (ApplicationId, StepName, AssignedGroupId, SequenceNumber, Status, StartedDate, CompletedDate)
+        INSERT dbo.ApplicationWorkflowSteps (ApplicationId, StepName, AssignedGroupId, SequenceNumber, Status, StartedDate, CompletedDate, RequiresSignature)
         SELECT @ApplicationId,
                steps.StepName,
                steps.AssignedGroupId,
                steps.SequenceNumber,
                steps.InitialStatus,
                CASE WHEN steps.InitialStatus = 'Approved' THEN GETDATE() ELSE NULL END,
-               CASE WHEN steps.InitialStatus = 'Approved' THEN GETDATE() ELSE NULL END
+               CASE WHEN steps.InitialStatus = 'Approved' THEN GETDATE() ELSE NULL END,
+               steps.RequiresSignature
         FROM dbo.WorkflowTemplateSteps steps
         WHERE steps.WorkflowTemplateId = @WorkflowTemplateId
           AND steps.SequenceNumber > @CompletedPrefix;
@@ -166,7 +179,7 @@ BEGIN
     DEALLOCATE application_cursor;
 
     COMMIT TRANSACTION;
-    SELECT templates.WorkflowTemplateId, templates.ApplicationType, templates.TemplateName, templates.IsActive, steps.WorkflowTemplateStepId, steps.StepName, groups.GroupName AS AssignedGroupName, steps.SequenceNumber, steps.InitialStatus, steps.IsRequired
+    SELECT templates.WorkflowTemplateId, templates.ApplicationType, templates.TemplateName, templates.IsActive, steps.WorkflowTemplateStepId, steps.StepName, groups.GroupName AS AssignedGroupName, steps.SequenceNumber, steps.InitialStatus, steps.IsRequired, steps.RequiresSignature
     FROM dbo.WorkflowTemplates templates INNER JOIN dbo.WorkflowTemplateSteps steps ON steps.WorkflowTemplateId = templates.WorkflowTemplateId INNER JOIN dbo.Groups groups ON groups.GroupId = steps.AssignedGroupId
     WHERE templates.WorkflowTemplateId = @WorkflowTemplateId ORDER BY steps.SequenceNumber;
 END;

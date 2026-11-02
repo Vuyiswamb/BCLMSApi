@@ -17,6 +17,7 @@ public sealed class WorkflowTemplateStepResponse
     public int SequenceNumber { get; set; }
     public string InitialStatus { get; set; } = "Pending";
     public bool IsRequired { get; set; }
+    public bool RequiresSignature { get; set; }
 }
 
 public sealed class WorkflowTemplateSaveRequest
@@ -34,4 +35,5 @@ public sealed class WorkflowTemplateStepSaveRequest
     public string AssignedGroupName { get; set; } = string.Empty;
     public string InitialStatus { get; set; } = "Pending";
     public bool IsRequired { get; set; } = true;
+    public bool RequiresSignature { get; set; }
 }

@@ -67,6 +67,7 @@ BEGIN
         ActionedByUserId INT NULL,
         ActionedByDisplayName NVARCHAR(150) NULL,
         DecisionDate DATETIME2(0) NULL,
+        RequiresSignature BIT NOT NULL CONSTRAINT DF_ApplicationWorkflowSteps_RequiresSignature DEFAULT (0),
         CreatedDate DATETIME2(0) NOT NULL CONSTRAINT DF_ApplicationWorkflowSteps_CreatedDate DEFAULT (SYSUTCDATETIME())
     );
 END;
@@ -87,6 +88,12 @@ GO
 IF COL_LENGTH('dbo.ApplicationWorkflowSteps', 'DecisionDate') IS NULL
 BEGIN
     ALTER TABLE dbo.ApplicationWorkflowSteps ADD DecisionDate DATETIME2(0) NULL;
+END;
+GO
+
+IF COL_LENGTH('dbo.ApplicationWorkflowSteps', 'RequiresSignature') IS NULL
+BEGIN
+    ALTER TABLE dbo.ApplicationWorkflowSteps ADD RequiresSignature BIT NOT NULL CONSTRAINT DF_ApplicationWorkflowSteps_RequiresSignature DEFAULT (0) WITH VALUES;
 END;
 GO
 

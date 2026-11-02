@@ -322,6 +322,9 @@ public class FormalBusinessRepository(Datalayer datalayer) : IFormalBusinessRepo
                         GroupName = reader.GetString(reader.GetOrdinal("GroupName")),
                         SequenceNumber = reader.GetInt32(reader.GetOrdinal("SequenceNumber")),
                         Status = reader.GetString(reader.GetOrdinal("Status")),
+                        RequiresSignature = HasColumn(reader, "RequiresSignature") && !reader.IsDBNull(reader.GetOrdinal("RequiresSignature"))
+                            ? reader.GetBoolean(reader.GetOrdinal("RequiresSignature"))
+                            : null,
                         StartedDate = reader.IsDBNull(reader.GetOrdinal("StartedDate")) ? null : reader.GetDateTime(reader.GetOrdinal("StartedDate")),
                         CompletedDate = reader.IsDBNull(reader.GetOrdinal("CompletedDate")) ? null : reader.GetDateTime(reader.GetOrdinal("CompletedDate")),
                         Remarks = reader.IsDBNull(reader.GetOrdinal("Remarks")) ? null : reader.GetString(reader.GetOrdinal("Remarks")),

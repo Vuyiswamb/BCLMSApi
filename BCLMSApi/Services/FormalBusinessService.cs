@@ -475,15 +475,6 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
             throw new ArgumentException("A rejection reason is required.");
         }
 
-        if (decision.Equals("Approve", StringComparison.OrdinalIgnoreCase)
-            && (request.DocumentName?.Contains("Admin Approval", StringComparison.OrdinalIgnoreCase) == true
-                || request.DocumentName?.Contains("Functional Head Approval", StringComparison.OrdinalIgnoreCase) == true
-                || request.DocumentName?.Contains("Director Approval", StringComparison.OrdinalIgnoreCase) == true)
-            && string.IsNullOrWhiteSpace(request.SignatureBase64))
-        {
-            throw new ArgumentException("This approval step requires a signature.");
-        }
-
         if (!string.IsNullOrWhiteSpace(request.FileBase64))
         {
             var fileBytes = Convert.FromBase64String(NormalizeBase64(request.FileBase64));
@@ -529,6 +520,13 @@ public class FormalBusinessService(IFormalBusinessRepository formalBusinessRepos
         var currentStep = currentApplication.WorkflowSteps.OrderBy(step => step.SequenceNumber)
             .FirstOrDefault(step => !IsCompletedWorkflowStatus(step.Status))
             ?? throw new ArgumentException("There is no active workflow step to process.");
+
+        if (decision.Equals("Approve", StringComparison.OrdinalIgnoreCase)
+            && currentStep.RequiresSignature == true
+            && string.IsNullOrWhiteSpace(request.SignatureBase64))
+        {
+            throw new ArgumentException("This approval step requires a signature.");
+        }
 
         // An explicit application assignment takes precedence over the normal
         // workflow-group permission. While an assignment exists for this step,

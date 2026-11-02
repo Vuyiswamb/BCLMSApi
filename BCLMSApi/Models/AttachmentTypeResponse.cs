@@ -10,6 +10,8 @@ public class AttachmentTypeResponse
 
     public bool IsRequired { get; set; }
 
+    public bool IsActive { get; set; }
+
     public List<string> LicenceTypes { get; set; } = [];
 
     public long MaxFileSizeBytes { get; set; }
