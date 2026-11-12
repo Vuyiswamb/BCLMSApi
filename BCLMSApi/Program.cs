@@ -20,6 +20,7 @@ builder.Services.Configure<FormOptions>(options =>
 builder.Services.AddControllers();
 builder.Services.AddScoped<Datalayer>();
 builder.Services.AddScoped<InvoiceRepository>();
+builder.Services.AddHttpClient<BankMePaymentService>(client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddScoped<InvoiceItemRepository>();
 builder.Services.AddScoped<ApplicationLookupRepository>();
 builder.Services.AddScoped<EventPremiseRepository>();
@@ -28,6 +29,7 @@ builder.Services.AddScoped<AuthDiagnosticsRepository>();
 builder.Services.AddScoped<StallsRepository>();
 builder.Services.AddScoped<PermitVerificationRepository>();
 builder.Services.AddScoped<AssistedIntakeRepository>();
+builder.Services.AddScoped<ReceptionVisitRepository>();
 builder.Services.AddScoped<WorkflowTemplateRepository>();
 builder.Services.AddScoped<AttachmentTypeRepository>();
 builder.Services.AddScoped<WorkshopRepository>();

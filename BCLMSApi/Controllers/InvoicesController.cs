@@ -7,7 +7,7 @@ namespace BCLMSApi.Controllers;
 
 [ApiController]
 [Route("api/invoices")]
-public class InvoicesController(InvoiceRepository repository, IUserTokenService tokens) : ControllerBase
+public class InvoicesController(InvoiceRepository repository, IUserTokenService tokens, IFormalBusinessService applications, BankMePaymentService bankMe) : ControllerBase
 {
     [HttpPost]
     public async Task<ActionResult> Save(InvoiceRequest request)
@@ -30,7 +30,36 @@ public class InvoicesController(InvoiceRepository repository, IUserTokenService 
     }
     [HttpGet("{applicationId:int}")]
     public async Task<ActionResult> Get(int applicationId)
-    { if (tokens.GetValidTokenPayload(Request.Headers.Authorization) is null) return Unauthorized(); var invoice=await repository.GetAsync(applicationId); return invoice is null ? Ok(new {paymentReference="",glAccountNumber="",paymentStatus="Unavailable",lines=Array.Empty<object>()}) : Ok(invoice); }
+    { var user=tokens.GetValidTokenPayload(Request.Headers.Authorization); if(user is null)return Unauthorized(); if(user.IsCustomer && await applications.GetInternalApplicationDetailAsync(applicationId,user) is null)return NotFound(); var invoice=await repository.GetAsync(applicationId); return invoice is null ? Ok(new {paymentReference="",glAccountNumber="",paymentStatus="Unavailable",lines=Array.Empty<object>()}) : Ok(invoice); }
+
+    [HttpPost("{applicationId:int}/bankme-token")]
+    public async Task<ActionResult<BankMeTokenResponse>> CreateBankMeToken(int applicationId, CancellationToken cancellationToken)
+    {
+        var user = tokens.GetValidTokenPayload(Request.Headers.Authorization);
+        if (user is null) return Unauthorized();
+        if (!user.IsCustomer) return Forbid();
+        var application = await applications.GetInternalApplicationDetailAsync(applicationId, user);
+        var invoice = await repository.GetAsync(applicationId);
+        if (application is null || invoice is null) return NotFound(new { message = "Application invoice not found." });
+
+        try { return Ok(await bankMe.CreateTokenAsync(application, invoice, cancellationToken)); }
+        catch (InvalidOperationException error) { return BadRequest(new { message = error.Message }); }
+    }
+
+    [HttpPost("bankme-webhook")]
+    [IgnoreAntiforgeryToken]
+    public async Task<ActionResult> BankMeWebhook(CancellationToken cancellationToken)
+    {
+        using var reader = new StreamReader(Request.Body);
+        var rawBody = await reader.ReadToEndAsync(cancellationToken);
+        if (!bankMe.IsValidWebhook(rawBody, Request.Headers["X-Webhook-Signature"].FirstOrDefault())) return Unauthorized();
+        BankMeWebhookPayload? payload;
+        try { payload = JsonSerializer.Deserialize<BankMeWebhookPayload>(rawBody, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }); }
+        catch (JsonException) { return BadRequest(); }
+        if (payload is null || string.IsNullOrWhiteSpace(payload.GroupReference) || string.IsNullOrWhiteSpace(payload.PaymentUuid) || string.IsNullOrWhiteSpace(payload.Status)) return BadRequest();
+        await bankMe.CompleteWebhookAsync(payload.GroupReference, payload.PaymentUuid, payload.Status, payload.TotalAmount);
+        return Ok();
+    }
     [HttpGet("{applicationId:int}/transactions")]
     public async Task<ActionResult> Transactions(int applicationId)
     { if (tokens.GetValidTokenPayload(Request.Headers.Authorization) is null) return Unauthorized(); return Ok(await repository.GetTransactionsAsync(applicationId)); }

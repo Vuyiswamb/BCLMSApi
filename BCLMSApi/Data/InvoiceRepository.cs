@@ -20,6 +20,28 @@ public sealed record PaymentTransaction(
 
 public class InvoiceRepository(Datalayer datalayer)
 {
+    public async Task SaveBankMeAttemptAsync(int applicationId, string groupReference, string uniqueReference, decimal amount)
+    {
+        await using var command = datalayer.CreateStoredProcedureCommand("dbo.usp_BankMePaymentAttempts_Save");
+        command.Parameters.AddWithValue("@ApplicationId", applicationId);
+        command.Parameters.AddWithValue("@GroupReference", groupReference);
+        command.Parameters.AddWithValue("@UniqueReference", uniqueReference);
+        command.Parameters.AddWithValue("@Amount", amount);
+        await command.Connection!.OpenAsync();
+        await command.ExecuteNonQueryAsync();
+    }
+
+    public async Task CompleteBankMeAttemptAsync(string groupReference, string paymentUuid, string status, decimal? gatewayAmount)
+    {
+        await using var command = datalayer.CreateStoredProcedureCommand("dbo.usp_BankMePaymentAttempts_Complete");
+        command.Parameters.AddWithValue("@GroupReference", groupReference);
+        command.Parameters.AddWithValue("@PaymentUuid", paymentUuid);
+        command.Parameters.AddWithValue("@PaymentStatus", status);
+        command.Parameters.AddWithValue("@GatewayAmount", (object?)gatewayAmount ?? DBNull.Value);
+        await command.Connection!.OpenAsync();
+        await command.ExecuteNonQueryAsync();
+    }
+
     public async Task SaveAsync(int applicationId, string reference, string gl, string linesJson)
     {
         try
